@@ -106,6 +106,169 @@ function daysLeft(dateStr) {
 const STORE_KEY = "kebiao:ucas:v1";
 const CATALOG_URL = "./data/catalog.json";
 
+/* ---------------- 云同步 (Supabase) ---------------- */
+const SUPABASE_URL = "https://vwltcmdewimpbpooufvh.supabase.co";
+const SUPABASE_KEY = "sb_publishable_ONe5Ft1rxeRt-rcdruXYoQ_sM0jgwLn";
+
+let supabaseClient = null;
+let authUser = null;
+let pushTimer = null;
+
+function initSupabase() {
+  if (typeof window !== "undefined" && window.supabase) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+}
+
+/* 本地修改后 800ms 内合并推送云端（登录状态下） */
+function schedulePush() {
+  if (!supabaseClient || !authUser) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushToCloud, 800);
+}
+
+async function pushToCloud() {
+  if (!supabaseClient || !authUser) return;
+  try {
+    await supabaseClient.from("user_data").upsert({
+      user_id: authUser.id,
+      schedule: { codes: state.codes },
+      records: state.records,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "user_id" });
+  } catch (e) { console.warn("push failed", e); }
+}
+
+async function pullFromCloud() {
+  if (!supabaseClient || !authUser) return null;
+  try {
+    const { data } = await supabaseClient.from("user_data")
+      .select("schedule,records").eq("user_id", authUser.id).maybeSingle();
+    return data || null;
+  } catch (e) { console.warn("pull failed", e); return null; }
+}
+
+function applyCloud(cloud) {
+  const codes = (cloud && cloud.schedule && cloud.schedule.codes) || [];
+  state.codes = codes.filter(c => courseMap[c]);
+  state.records = cloud && cloud.records && typeof cloud.records === "object" ? cloud.records : {};
+  saveState();
+  render();
+}
+
+/* 登录后的数据合并：两端都有数据时让用户选择方向 */
+async function pullAndMerge() {
+  const cloud = await pullFromCloud();
+  const localHas = state.codes.length > 0;
+  const cloudHas = !!(cloud && cloud.schedule && cloud.schedule.codes && cloud.schedule.codes.length);
+  if (cloudHas && localHas) {
+    showModal(`
+      <h3>发现两端都有课表</h3>
+      <p style="color:var(--muted);font-size:13px">
+        本机：${state.codes.length} 门课 &nbsp;·&nbsp; 云端：${cloud.schedule.codes.length} 门课</p>
+      <div class="modal-actions">
+        <button class="ok" id="mgDownload">下载云端（覆盖本机）</button>
+        <button class="cancel" id="mgUpload">上传本机（覆盖云端）</button>
+      </div>`);
+    $("mgDownload").addEventListener("click", async () => {
+      hideModal();
+      applyCloud(cloud);
+      toast("已下载云端课表");
+    });
+    $("mgUpload").addEventListener("click", async () => {
+      hideModal();
+      await pushToCloud();
+      toast("已上传到云端");
+    });
+  } else if (cloudHas) {
+    applyCloud(cloud);
+    toast("已载入云端课表");
+  } else if (localHas) {
+    await pushToCloud();
+    toast("已上传课表到云端");
+  }
+}
+
+function updateAuthUI() {
+  $("btnLogin").textContent = authUser ? "☁ " + (authUser.email || "已登录").split("@")[0] : "☁ 登录";
+}
+
+function showAuthModal() {
+  if (authUser) {
+    showModal(`
+      <h3>已登录</h3>
+      <p>账号：${authUser.email}<br><span style="color:var(--muted);font-size:13px">课表与笔记已云同步，手机/电脑登录同一账号即可互通。</span></p>
+      <div class="modal-actions">
+        <button class="ok" id="authSync">立即同步</button>
+        <button class="cancel" id="authOut">退出登录</button>
+      </div>`);
+    $("authSync").addEventListener("click", async () => {
+      hideModal();
+      await pullAndMerge();
+      toast("同步完成");
+    });
+    $("authOut").addEventListener("click", async () => {
+      await supabaseClient.auth.signOut();
+      authUser = null;
+      updateAuthUI();
+      hideModal();
+      toast("已退出登录（本机数据保留）");
+    });
+    return;
+  }
+  showModal(`
+    <h3>登录以云同步</h3>
+    <p style="color:var(--muted);font-size:13px">输入邮箱 → 收验证码 → 登录。<br>之后课表、笔记、作业、考试自动同步，换设备登录同一邮箱即可。</p>
+    <div class="r-form">
+      <input id="authEmail" type="email" placeholder="邮箱（如 123@qq.com）" inputmode="email">
+      <div class="row2">
+        <input id="authCode" type="text" placeholder="6位验证码" inputmode="numeric" style="display:none">
+        <button class="r-btn ghost" id="authSend">发送验证码</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="ok" id="authOk">登录</button>
+      <button class="cancel" id="authCancel">取消</button>
+    </div>`);
+  const emailEl = $("authEmail");
+  const codeEl = $("authCode");
+  let sentCode = false;
+  $("authSend").addEventListener("click", async () => {
+    const email = emailEl.value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("邮箱格式不正确"); return; }
+    $("authSend").disabled = true;
+    try {
+      const { error } = await supabaseClient.auth.signInWithOtp({ email });
+      if (error) throw error;
+      sentCode = true;
+      codeEl.style.display = "block";
+      $("authSend").textContent = "重新发送";
+      toast("验证码已发送，请查收邮箱");
+    } catch (e) {
+      toast("发送失败：" + (e.message || e));
+    }
+    $("authSend").disabled = false;
+  });
+  $("authOk").addEventListener("click", async () => {
+    const email = emailEl.value.trim();
+    const token = codeEl.value.trim();
+    if (!sentCode) { toast("请先发送验证码"); return; }
+    if (!token) { toast("请输入验证码"); return; }
+    try {
+      const { data, error } = await supabaseClient.auth.verifyOtp({ email, token, type: "email" });
+      if (error) throw error;
+      authUser = data.user;
+      updateAuthUI();
+      hideModal();
+      toast("登录成功");
+      await pullAndMerge();
+    } catch (e) {
+      toast("验证失败：" + (e.message || e));
+    }
+  });
+  $("authCancel").addEventListener("click", hideModal);
+}
+
 let catalog = null;
 let courseMap = {};
 let state = { codes: [], records: {} };
@@ -126,6 +289,7 @@ function loadState() {
 function saveState() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   catch (e) { toast("保存失败（存储空间不足？）"); }
+  if (typeof document !== "undefined") schedulePush();
 }
 
 function recordsOf(code) {
@@ -749,6 +913,7 @@ function init() {
   });
   $("btnCodes").addEventListener("click", showCodesModal);
   $("btnShare").addEventListener("click", shareLink);
+  $("btnLogin").addEventListener("click", showAuthModal);
   $("btnBackup").addEventListener("click", () => {
     showModal(`
       <h3>备份与恢复</h3>
@@ -780,6 +945,15 @@ function init() {
 }
 
 if (typeof document !== "undefined") {
+  initSupabase();
+  if (supabaseClient) {
+    supabaseClient.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        authUser = data.session.user;
+        updateAuthUI();
+      }
+    });
+  }
   fetch(CATALOG_URL)
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(data => {
@@ -787,6 +961,7 @@ if (typeof document !== "undefined") {
       courseMap = {};
       for (const c of catalog.courses) courseMap[c.code] = c;
       init();
+      if (authUser) pullAndMerge();
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("./sw.js").catch(() => {});
       }

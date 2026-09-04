@@ -21,6 +21,7 @@
     <span class="brand-text">表<span id="termBadge" class="term-badge"></span></span>
   </div>
   <div class="top-actions">
+    <button id="btnLogin" class="icon-btn" title="登录云同步">☁ 登录</button>
     <button id="btnCodes" class="icon-btn" title="粘贴课程代码">⌨ 代码</button>
     <button id="btnShare" class="icon-btn" title="分享课表">↗ 分享</button>
     <button id="btnBackup" class="icon-btn" title="备份/恢复">⤓ 备份</button>
@@ -74,6 +75,7 @@
 <input type="file" id="fileImport" accept=".json" hidden>
 <div id="toast" class="toast"></div>
 
+<script src="./vendor/supabase.min.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>
