@@ -223,9 +223,45 @@ function showAuthModal() {
   }
   showModal(`
     <h3>登录以云同步</h3>
-    <p style="color:var(--muted);font-size:13px">输入邮箱 → 收验证码 → 登录。<br>之后课表、笔记、作业、考试自动同步，换设备登录同一邮箱即可。</p>
+    <p style="color:var(--muted);font-size:13px">输入邮箱 → 手机收到登录链接 → 点链接即自动登录。<br>（邮件发件人可标识为"课表"）</p>
     <div class="r-form">
       <input id="authEmail" type="email" placeholder="邮箱（如 123@qq.com）" inputmode="email">
+    </div>
+    <div class="modal-actions">
+      <button class="ok" id="authOk">发送登录链接</button>
+      <button class="cancel" id="authCancel">取消</button>
+    </div> <div class="modal-actions" style="margin-top:6px">
+      <button class="cancel" id="authCodeMode">改用验证码登录</button>
+    </div>`);
+  const emailEl = $("authEmail");
+  let codeMode = false;
+  $("authCodeMode").addEventListener("click", () => { codeMode = true; showAuthCodeUI(emailEl.value); });
+  $("authOk").addEventListener("click", async () => {
+    const email = emailEl.value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("邮箱格式不正确"); return; }
+    $("authOk").disabled = true;
+    try {
+      const { error } = await supabaseClient.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: location.origin + "/auth-callback.html" }
+      });
+      if (error) throw error;
+      hideModal();
+      toast("登录链接已发送，请到邮箱点击链接完成登录");
+    } catch (e) {
+      toast("发送失败：" + (e.message || e));
+    }
+    $("authOk").disabled = false;
+  });
+  $("authCancel").addEventListener("click", hideModal);
+}
+
+function showAuthCodeUI(email) {
+  showModal(`
+    <h3>验证码登录</h3>
+    <p style="color:var(--muted);font-size:13px">输入邮箱 → 收 6 位验证码 → 登录</p>
+    <div class="r-form">
+      <input id="authEmail" type="email" placeholder="邮箱" inputmode="email" value="${email || ""}">
       <div class="row2">
         <input id="authCode" type="text" placeholder="6位验证码" inputmode="numeric" style="display:none">
         <button class="r-btn ghost" id="authSend">发送验证码</button>
