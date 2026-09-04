@@ -1,0 +1,17 @@
+# Netlify 部署配置
+# 1) 静态托管（本仓库）  2) 把 Supabase API 反代到本站（绕过 GFW 对 *.supabase.co 的 SNI 阻断）
+
+[build]
+  publish = "."
+
+[[redirects]]
+  from = "/auth/v1/*"
+  to = "https://vwltcmdewimpbpooufvh.supabase.co/auth/v1/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/rest/v1/*"
+  to = "https://vwltcmdewimpbpooufvh.supabase.co/rest/v1/:splat"
+  status = 200
+  force = true
