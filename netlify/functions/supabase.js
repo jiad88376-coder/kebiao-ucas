@@ -1,5 +1,5 @@
 // Netlify Functions: Supabase 反代
-const TARGET_BASE = "https://vwltcmdewimpbpooufvh.supabase.co";
+const TARGET_BASE = "https://vwtlcmdewimpbpooufvh.supabase.co";
 const FUNC_PREFIX = "/.netlify/functions/supabase";
 const KEY = "sb_publishable_ONe5Ft1rxeRt-rcdruXYoQ_sM0jgwLn";
 
