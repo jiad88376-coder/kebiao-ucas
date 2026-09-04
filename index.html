@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2F6FED">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="课表">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon-192.png">
+<title>课表 · 国科大课程表</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">课</span>
+    <span class="brand-text">表<span id="termBadge" class="term-badge"></span></span>
+  </div>
+  <div class="top-actions">
+    <button id="btnCodes" class="icon-btn" title="粘贴课程代码">⌨ 代码</button>
+    <button id="btnShare" class="icon-btn" title="分享课表">↗ 分享</button>
+    <button id="btnBackup" class="icon-btn" title="备份/恢复">⤓ 备份</button>
+  </div>
+</header>
+
+<!-- 空状态 / 欢迎页 -->
+<section id="welcome" class="welcome hidden">
+  <h1>生成你的专属课表</h1>
+  <p class="hint">把选课系统里的<b>课程代码</b>粘贴进来（每行一个），或者直接搜索课程名称添加。</p>
+  <textarea id="codeInput" spellcheck="false" placeholder="例如：&#10;180081070200P1001H-1&#10;180081070202P3007H&#10;180087120200MX016H"></textarea>
+  <button id="btnGenerate" class="primary">生成课表</button>
+  <div class="divider"><span>或</span></div>
+  <div class="searchbox">
+    <input id="welcomeSearch" placeholder="🔍 搜索课程名称 / 课程代码…" autocomplete="off">
+    <div id="welcomeSug" class="suggestions"></div>
+  </div>
+  <p class="footnote">数据仅供参考，以教务系统为准 · 课表只保存在本机浏览器</p>
+</section>
+
+<!-- 主界面 -->
+<main id="main" class="hidden">
+  <div class="searchbar">
+    <input id="searchInput" placeholder="🔍 添加课程：搜索名称或代码" autocomplete="off">
+    <div id="suggestions" class="suggestions"></div>
+  </div>
+  <div id="banner" class="banner hidden"></div>
+
+  <div class="gridwrap" id="gridwrap">
+    <table id="grid"></table>
+  </div>
+
+  <div class="legend">
+    <span class="lg"><i class="dot" style="background:#FFEBEE"></i>核心课</span>
+    <span class="lg"><i class="dot" style="background:#FFF3E0"></i>专业课</span>
+    <span class="lg"><i class="dot" style="background:#FCE4EC"></i>公共课</span>
+    <span class="lg"><i class="dot" style="background:#E0F7FA"></i>研讨/实验</span>
+    <span class="lg"><i class="conflict-mark"></i>时间冲突</span>
+  </div>
+  <footer class="footnote">数据仅供参考，以教务系统为准 · 课表仅存本机浏览器，请定期备份</footer>
+</main>
+
+<!-- 课程详情抽屉 -->
+<div id="overlay" class="overlay hidden"></div>
+<div id="drawer" class="drawer hidden"></div>
+
+<!-- 通用弹窗 -->
+<div id="modal" class="modal hidden"></div>
+
+<!-- 隐藏元素 -->
+<input type="file" id="fileImport" accept=".json" hidden>
+<div id="toast" class="toast"></div>
+
+<script src="./app.js"></script>
+</body>
+</html>
