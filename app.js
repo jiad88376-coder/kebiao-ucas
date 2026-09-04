@@ -223,19 +223,21 @@ function showAuthModal() {
   }
   showModal(`
     <h3>登录以云同步</h3>
-    <p style="color:var(--muted);font-size:13px">输入邮箱 → 手机收到登录链接 → 点链接即自动登录。<br>（邮件发件人可标识为"课表"）</p>
+    <p style="color:var(--muted);font-size:13px">选择一种方式：邮箱链接 / 验证码 / 密码登录。<br>三类方式都可注册并登录（确认邮箱已关闭，无需邮件点链接）。</p>
     <div class="r-form">
       <input id="authEmail" type="email" placeholder="邮箱（如 123@qq.com）" inputmode="email">
     </div>
     <div class="modal-actions">
       <button class="ok" id="authOk">发送登录链接</button>
       <button class="cancel" id="authCancel">取消</button>
-    </div> <div class="modal-actions" style="margin-top:6px">
+    </div>
+    <div class="modal-actions" style="margin-top:6px">
       <button class="cancel" id="authCodeMode">改用验证码登录</button>
+      <button class="cancel" id="authPassMode">改用密码登录</button>
     </div>`);
   const emailEl = $("authEmail");
-  let codeMode = false;
-  $("authCodeMode").addEventListener("click", () => { codeMode = true; showAuthCodeUI(emailEl.value); });
+  $("authCodeMode").addEventListener("click", () => showAuthCodeUI(emailEl.value));
+  $("authPassMode").addEventListener("click", () => showAuthPasswordUI(emailEl.value));
   $("authOk").addEventListener("click", async () => {
     const email = emailEl.value.trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("邮箱格式不正确"); return; }
@@ -308,6 +310,70 @@ function showAuthCodeUI(email) {
     }
   });
   $("authCancel").addEventListener("click", hideModal);
+}
+
+function showAuthPasswordUI(email) {
+  showModal(`
+    <h3>邮箱密码登录</h3>
+    <p style="color:var(--muted);font-size:13px">已有账号直接登录；没有账号用它注册（立即生效，无需邮件确认）。</p>
+    <div class="r-form">
+      <input id="authEmail" type="email" placeholder="邮箱" inputmode="email" value="${email || ""}">
+      <input id="authPass" type="password" placeholder="密码（至少 8 位）">
+    </div>
+    <div class="modal-actions">
+      <button class="ok" id="authPassLogin">登录</button>
+      <button class="cancel" id="authPassSignup">注册</button>
+    </div>
+    <div class="modal-actions" style="margin-top:6px">
+      <button class="cancel" id="authPassBack">返回其他方式</button>
+    </div>`);
+  const emailEl = $("authEmail");
+  const passEl = $("authPass");
+
+  async function finish(data) {
+    authUser = data.user;
+    updateAuthUI();
+    hideModal();
+    toast("登录成功，正在同步…");
+    await pullAndMerge();
+  }
+
+  $("authPassLogin").addEventListener("click", async () => {
+    const email = emailEl.value.trim();
+    const pass = passEl.value;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("邮箱格式不正确"); return; }
+    if (!pass) { toast("请输入密码"); return; }
+    try {
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
+      if (error) throw error;
+      await finish(data);
+    } catch (e) {
+      toast("登录失败：" + (e.message || e));
+    }
+  });
+
+  $("authPassSignup").addEventListener("click", async () => {
+    const email = emailEl.value.trim();
+    const pass = passEl.value;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("邮箱格式不正确"); return; }
+    if (pass.length < 8) { toast("密码至少 8 位"); return; }
+    try {
+      const { data, error } = await supabaseClient.auth.signUp({
+        email, password: pass
+      });
+      if (error) throw error;
+      if (!data.user) {
+        toast("已提交注册，请查收确认邮件");
+        return;
+      }
+      await finish(data);
+    } catch (e) {
+      const msg = e.message || e;
+      toast(msg.includes("already registered") ? "该邮箱已注册，请直接登录" : "注册失败：" + msg);
+    }
+  });
+
+  $("authPassBack").addEventListener("click", () => showAuthModal());
 }
 
 let catalog = null;
