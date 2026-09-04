@@ -523,14 +523,31 @@ function renderGrid() {
   }
 
   const today = dayIndexOfToday();
-  const cur = currentPeriod();
+
+  /* 计算每节课的放置：起点(row,col) + 跨节 span；同格冲突则叠加 */
+  const starts = {};   // "row-col" -> [{course, session, span}]
+  const covered = {};  // "row-col" -> true (被 rowspan 覆盖)
+  const placed = new Set();
+  for (const c of courses) {
+    for (const s of c.sessions) {
+      if (!(s.day >= 1 && s.day <= 7 && s.p1 >= 1 && s.p2 >= s.p1 && s.p2 <= 13)) continue;
+      const key = `${c.code}|${s.day}|${s.p1}|${s.p2}|${s.weeks}`;
+      if (placed.has(key)) continue;
+      placed.add(key);
+      const span = s.p2 - s.p1 + 1;
+      const sk = `${s.p1}-${s.day}`;
+      (starts[sk] = starts[sk] || []).push({ course: c, session: s, span });
+      for (let r = s.p1; r < s.p1 + span; r++) covered[`${r}-${s.day}`] = true;
+    }
+  }
 
   const thead = el("thead");
   const hr = el("tr");
-  hr.appendChild(el("th", "time-col", "节次"));
+  hr.appendChild(el("th", "time-col", ""));
   for (let d = 1; d <= 7; d++) {
-    const th = el("th", d === today ? "today" : "", DAY_NAMES[d - 1]);
-    if (d === today) th.appendChild(el("span", "", " · 今日"));
+    const th = el("th", d === today ? "today" : "");
+    th.appendChild(el("span", "th-day", DAY_NAMES[d - 1]));
+    if (d === today) th.appendChild(el("span", "th-today", "今日"));
     hr.appendChild(th);
   }
   thead.appendChild(hr);
@@ -538,50 +555,45 @@ function renderGrid() {
   const tbody = el("tbody");
   for (let p = 1; p <= 13; p++) {
     const tr = el("tr");
-    const tc = el("td", "time-col", `${p}\n${PERIOD_TIMES[p] || ""}`);
-    tc.style.whiteSpace = "pre-line";
+    const tc = el("td", "time-col");
+    tc.appendChild(el("div", "tp-num", String(p)));
+    tc.appendChild(el("div", "tp-time", (PERIOD_TIMES[p] || "").split("-").join("–")));
     tr.appendChild(tc);
     for (let d = 1; d <= 7; d++) {
-      const td = el("td", d === today ? "day-cell today-col" : "day-cell");
+      const sk = `${p}-${d}`;
+      if (covered[sk] && !starts[sk]) continue; // 由跨节行占位
+      const td = el("td", "day-cell" + (d === today ? " today-col" : ""));
+      const list = starts[sk];
+      if (list && list.length) {
+        td.rowSpan = list[0].span;
+        for (const gc of list) {
+          const block = buildCourseBlock(gc.course, gc.session, conflictSess);
+          block.addEventListener("click", () => openDrawer(gc.course.code));
+          td.appendChild(block);
+        }
+      }
       tr.appendChild(td);
     }
     tbody.appendChild(tr);
   }
 
-  /* 放置课程 */
-  const placed = new Set(); // session 的引用去重
-  for (const c of courses) {
-    for (const s of c.sessions) {
-      if (!(s.day >= 1 && s.day <= 7 && s.p1 >= 1 && s.p2 >= s.p1)) continue;
-      const key = `${c.code}|${s.day}|${s.p1}|${s.p2}|${s.weeks}`;
-      if (placed.has(key)) continue;
-      placed.add(key);
-      const td = tbody.rows[s.p1 - 1].cells[s.day]; // cells[0]=时间列, cells[day]=该天
-      const cell = el("div", "course-cell " + attrClass(c.attr));
-      if (conflictSess.has(`${s.day}-${s.p1}-${s.p2}`)) cell.classList.add("conflict");
-      const tag = el("span", "cc-conflict-tag", "冲突");
-      if (conflictCodes.has(c.code)) cell.appendChild(tag);
-      cell.appendChild(el("span", "cc-name", c.name));
-      if (s.room) cell.appendChild(el("span", "cc-room", s.room));
-      cell.style.gridRow = `span ${s.p2 - s.p1 + 1}`;
-      cell.dataset.code = c.code;
-      cell.addEventListener("click", () => openDrawer(c.code));
-      td.appendChild(cell);
-      td.style.height = `${(s.p2 - s.p1 + 1) * 52}px`;
-    }
-  }
-
-  /* 今日行高亮 */
-  if (cur) {
-    const row = tbody.rows[cur - 1];
-    if (row) {
-      for (const cell of row.cells) cell.style.background = "#fffbe6";
-    }
-  }
-
   grid.innerHTML = "";
   grid.appendChild(thead);
   grid.appendChild(tbody);
+}
+
+/* 课程块：课程名 / 教师·教室 / 周次（对齐 Excel 版） */
+function buildCourseBlock(course, session, conflictSess) {
+  const isConflict = conflictSess.has(`${session.day}-${session.p1}-${session.p2}`);
+  const block = el("div", "course-cell " + attrClass(course.attr) + (isConflict ? " conflict" : ""));
+  block.appendChild(el("div", "cc-name", course.name));
+  const meta = [];
+  if (course.teacher) meta.push(course.teacher);
+  if (session.room) meta.push(session.room);
+  if (meta.length) block.appendChild(el("div", "cc-meta", meta.join(" · ")));
+  block.appendChild(el("div", "cc-weeks", session.weeks));
+  if (isConflict) block.appendChild(el("span", "cc-conflict-tag", "冲突"));
+  return block;
 }
 
 /* ---------------- 搜索 ---------------- */

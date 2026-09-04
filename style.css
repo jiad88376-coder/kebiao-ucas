@@ -105,39 +105,54 @@ button { font-family: inherit; }
 /* ---------- 周课表 ---------- */
 .gridwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; background: var(--card);
   border-radius: var(--radius); border: 1px solid var(--line); }
-#grid { border-collapse: collapse; min-width: 760px; width: 100%; table-layout: fixed; }
+#grid { border-collapse: collapse; min-width: 780px; width: 100%; table-layout: fixed; }
 #grid th, #grid td { border: 1px solid var(--line); }
-#grid th {
-  background: #f7f9fc; font-size: 13px; font-weight: 600; padding: 6px 2px;
-  width: 110px; position: sticky; top: 0; z-index: 2;
+#grid thead th {
+  background: #f7f9fc; padding: 4px 0 5px; width: 100px;
+  position: sticky; top: 0; z-index: 2; border-bottom: 2px solid var(--line);
 }
-#grid th.time-col { width: 52px; position: sticky; left: 0; z-index: 3; font-weight: 400; }
-#grid td.time-col { position: sticky; left: 0; background: #f7f9fc; z-index: 1;
-  font-size: 11px; color: var(--muted); text-align: center; }
-#grid td.day-cell { padding: 2px; height: 52px; vertical-align: top; }
-#grid th.today { background: #e3ecff; color: var(--primary); }
-#grid td.today-col { background: #f4f8ff; }
+#grid thead th.today { background: var(--primary); border-bottom-color: var(--primary-dark); }
+#grid thead .th-day { display: block; font-size: 13px; font-weight: 600; color: var(--text); }
+#grid thead .th-today { display: block; font-size: 10px; color: var(--primary); margin-top: 1px; }
+#grid thead th.today .th-day { color: #fff; }
+#grid thead th.today .th-today { color: rgba(255,255,255,.8); }
+
+#grid td.time-col {
+  position: sticky; left: 0; background: #fbfcfd; z-index: 1;
+  width: 48px; padding: 0; text-align: center; vertical-align: middle;
+  border-right: 2px solid var(--line);
+}
+#grid td.time-col .tp-num { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.2; }
+#grid td.time-col .tp-time { font-size: 9.5px; color: var(--muted); line-height: 1.2; }
+
+#grid td.day-cell { padding: 2px; height: 48px; vertical-align: top; }
+#grid td.today-col { background: #f2f7ff; }
 
 .course-cell {
-  border-radius: 7px; padding: 4px 5px; min-height: 48px; height: 100%;
-  cursor: pointer; display: flex; flex-direction: column; gap: 1px; overflow: hidden;
-  position: relative; transition: filter .1s;
+  border-radius: 6px; padding: 3px 5px; height: 100%; min-height: 44px;
+  cursor: pointer; display: flex; flex-direction: column; gap: 0; overflow: hidden;
+  position: relative; transition: filter .12s, box-shadow .12s;
+  box-shadow: 0 1px 2px rgba(40, 60, 110, .06);
 }
-.course-cell:active { filter: brightness(.94); }
-.course-cell .cc-name { font-size: 12px; font-weight: 700; line-height: 1.25;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
-  word-break: break-all; }
-.course-cell .cc-room { font-size: 10px; color: rgba(0,0,0,.55); }
-.course-cell .cc-conflict-tag { position: absolute; top: 2px; right: 3px; font-size: 9px; color: #fff;
-  background: var(--danger); border-radius: 4px; padding: 0 4px; }
-.course-cell.conflict { outline: 2px solid var(--danger); outline-offset: -2px; }
+.course-cell:active { filter: brightness(.95); }
+.cc-name {
+  font-size: 11.5px; font-weight: 600; line-height: 1.3; color: #243047;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden; word-break: break-all;
+}
+.cc-meta { font-size: 10px; color: #6d7686; line-height: 1.3; margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-weeks { font-size: 9.5px; color: #98a1b0; line-height: 1.3; margin-top: 1px; }
+.cc-conflict-tag { position: absolute; top: 2px; right: 3px; font-size: 9px; color: #fff;
+  background: var(--danger); border-radius: 3px; padding: 0 4px; line-height: 1.5; }
+.course-cell.conflict { outline: 1.5px solid var(--danger); outline-offset: -1.5px; }
 
-.attr-core    { background: #FFEBEE; }
-.attr-prof    { background: #FFF3E0; }
-.attr-public  { background: #FCE4EC; }
-.attr-semi    { background: #E0F7FA; }
-.attr-exp     { background: #FFF8E1; }
-.attr-other   { background: #EEEEEE; }
+.attr-core    { background: #E3EFFC; }
+.attr-prof    { background: #FCF1E3; }
+.attr-public  { background: #FBEBF2; }
+.attr-semi    { background: #E4F4F2; }
+.attr-exp     { background: #F6F1DE; }
+.attr-other   { background: #EFF1F5; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 10px 6px 4px; font-size: 12px; color: var(--muted); }
 .legend .lg { display: inline-flex; align-items: center; gap: 4px; }
