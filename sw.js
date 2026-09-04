@@ -1,5 +1,5 @@
 /* Service Worker: 离线缓存应用外壳 + 课程库 */
-const CACHE = "kebiao-ucas-v2";
+const CACHE = "kebiao-ucas-v3";
 const ASSETS = [
   "./",
   "./index.html",

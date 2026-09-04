@@ -41,7 +41,7 @@ exports.handler = async (event) => {
 
   /* 分层诊断: /.netlify/functions/supabase/diag */
   if (event.path && event.path.endsWith("/diag")) {
-    const host = "vwltcmdewimpbpooufvh.supabase.co";
+    const host = TARGET_BASE.replace(/^https:\/\//, "");
     const results = {};
     try {
       const addrs = await dns.lookup(host, { all: true });
