@@ -30,6 +30,7 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
+  if (req.url.includes("/.netlify/")) return; // 不缓存函数请求
   e.respondWith(
     caches.match(req).then((hit) => {
       if (hit) return hit;

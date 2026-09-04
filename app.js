@@ -106,13 +106,13 @@ function daysLeft(dateStr) {
 const STORE_KEY = "kebiao:ucas:v1";
 const CATALOG_URL = "./data/catalog.json";
 
-/* ---------------- 云同步 (Supabase, 经 Netlify 反代) ---------------- */
-/* 直连 *.supabase.co 在国内被 GFW 阻断，统一经 Netlify 边缘代理转发。
-   在 Netlify 站点上打开时同源直连本站代理；在 GitHub Pages 打开时走 Netlify 反代。 */
-const SUPABASE_BASE = "https://kebiao-ucas.netlify.app";
+/* ---------------- 云同步 (Supabase, 经 Netlify Function 反代) ---------------- */
+/* 直连 *.supabase.co 在国内被 GFW 阻断，统一经 Netlify Function 转发。
+   在 Netlify 站点打开时为同源；在 GitHub Pages 打开时跨域（Function 已带 CORS）。 */
+const SUPABASE_FUNC_PATH = "/.netlify/functions/supabase";
 const SUPABASE_URL = (typeof location !== "undefined" && location.hostname.endsWith("netlify.app"))
-  ? location.origin
-  : SUPABASE_BASE;
+  ? location.origin + SUPABASE_FUNC_PATH
+  : "https://kebiao-ucas.netlify.app" + SUPABASE_FUNC_PATH;
 const SUPABASE_KEY = "sb_publishable_ONe5Ft1rxeRt-rcdruXYoQ_sM0jgwLn";
 
 let supabaseClient = null;
