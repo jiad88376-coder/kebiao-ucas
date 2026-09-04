@@ -5,13 +5,20 @@
   publish = "."
 
 [[redirects]]
-  from = "/auth/v1/*"
+  from = "/auth/v1/:splat"
   to = "https://vwltcmdewimpbpooufvh.supabase.co/auth/v1/:splat"
   status = 200
   force = true
 
 [[redirects]]
-  from = "/rest/v1/*"
+  from = "/rest/v1/:splat"
   to = "https://vwltcmdewimpbpooufvh.supabase.co/rest/v1/:splat"
+  status = 200
+  force = true
+
+# 临时: 验证 Netlify proxy 功能是否可用（测试完删除）
+[[redirects]]
+  from = "/test-proxy/:splat"
+  to = "https://example.com/:splat"
   status = 200
   force = true
