@@ -16,6 +16,24 @@ exports.handler = async (event) => {
     return { statusCode: 204, headers: CORS_HEADERS, body: "" };
   }
 
+  /* 诊断路由: /.netlify/functions/supabase/diag */
+  if (event.path && event.path.endsWith("/diag")) {
+    const results = {};
+    for (const [name, url] of [
+      ["example.com", "https://example.com"],
+      ["supabase-co-main", "https://supabase.co"],
+      ["supabase-project", TARGET_BASE + "/auth/v1/settings"],
+    ]) {
+      try {
+        await fetch(url);
+        results[name] = "ok";
+      } catch (e) {
+        results[name] = "FAIL: " + String(e && e.message || e);
+      }
+    }
+    return { statusCode: 200, headers: { ...CORS_HEADERS, "content-type": "application/json" }, body: JSON.stringify(results) };
+  }
+
   const path = (event.path || "").replace(new RegExp("^" + FUNC_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "");
   if (!path) return { statusCode: 404, headers: CORS_HEADERS, body: "not found" };
   const target = TARGET_BASE + path;
