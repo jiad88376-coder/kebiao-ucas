@@ -1,9 +1,8 @@
 /* Service Worker: 离线缓存应用外壳 + 课程库 */
-const CACHE = "kebiao-ucas-v5";
+const CACHE = "kebiao-ucas-v6";
 const ASSETS = [
   "./",
   "./index.html",
-  "./auth-callback.html",
   "./style.css",
   "./app.js",
   "./vendor/supabase.min.js",

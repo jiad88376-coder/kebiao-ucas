@@ -222,158 +222,116 @@ function showAuthModal() {
     return;
   }
   showModal(`
-    <div class="auth-head">☁ 登录以云同步</div>
-    <p class="auth-desc">课表、笔记、作业、考试自动同步<br>手机与电脑登录同一账号即可互通</p>
+    <div class="auth-head">☁ 登录</div>
+    <p class="auth-desc">邮箱 + 密码登录，课表/笔记/作业/考试云同步<br>没有账号？点下方「注册新账号」</p>
     <div class="r-form">
       <input id="authEmail" class="auth-input" type="email" placeholder="请输入邮箱，如 123@qq.com" inputmode="email">
-    </div>
-    <button class="auth-main" id="authOk">发送登录链接</button>
-    <div class="auth-alt">
-      <button class="auth-alt-btn" id="authCodeMode">验证码登录</button>
-      <button class="auth-alt-btn" id="authPassMode">邮箱密码登录</button>
-      <button class="auth-alt-btn" id="authCancel">取消</button>
-    </div>`);
-  const emailEl = $("authEmail");
-  $("authCodeMode").addEventListener("click", () => showAuthCodeUI(emailEl.value));
-  $("authPassMode").addEventListener("click", () => showAuthPasswordUI(emailEl.value));
-  $("authOk").addEventListener("click", async () => {
-    const email = emailEl.value.trim();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("邮箱格式不正确"); return; }
-    $("authOk").disabled = true;
-    $("authOk").textContent = "发送中…";
-    try {
-      const { error } = await supabaseClient.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: location.origin + "/auth-callback.html" }
-      });
-      if (error) throw error;
-      hideModal();
-      toast("登录链接已发送，请到邮箱点击链接完成登录");
-    } catch (e) {
-      toast("发送失败：" + (e.message || e));
-    }
-    $("authOk").disabled = false;
-    $("authOk").textContent = "发送登录链接";
-  });
-  $("authCancel").addEventListener("click", hideModal);
-}
-
-function showAuthCodeUI(email) {
-  showModal(`
-    <div class="auth-head">验证码登录</div>
-    <p class="auth-desc">输入邮箱，收到 6 位数字验证码后完成登录</p>
-    <div class="r-form">
-      <input id="authEmail" class="auth-input" type="email" placeholder="请输入邮箱" inputmode="email" value="${email || ""}">
-      <div class="row2">
-        <input id="authCode" class="auth-input" type="text" placeholder="6 位验证码" inputmode="numeric" style="display:none">
-        <button class="r-btn ghost" id="authSend">发送验证码</button>
-      </div>
-    </div>
-    <button class="auth-main" id="authOk">登录</button>
-    <div class="auth-alt">
-      <button class="auth-alt-btn" id="authBack">返回</button>
-      <button class="auth-alt-btn" id="authCancel">取消</button>
-    </div>`);
-  const emailEl = $("authEmail");
-  const codeEl = $("authCode");
-  let sentCode = false;
-  $("authSend").addEventListener("click", async () => {
-    const email = emailEl.value.trim();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("邮箱格式不正确"); return; }
-    $("authSend").disabled = true;
-    try {
-      const { error } = await supabaseClient.auth.signInWithOtp({ email });
-      if (error) throw error;
-      sentCode = true;
-      codeEl.style.display = "block";
-      $("authSend").textContent = "重新发送";
-      toast("验证码已发送，请查收邮箱");
-    } catch (e) {
-      toast("发送失败：" + (e.message || e));
-    }
-    $("authSend").disabled = false;
-  });
-  $("authBack").addEventListener("click", () => showAuthModal());
-  $("authOk").addEventListener("click", async () => {
-    const email = emailEl.value.trim();
-    const token = codeEl.value.trim();
-    if (!sentCode) { toast("请先发送验证码"); return; }
-    if (!token) { toast("请输入验证码"); return; }
-    try {
-      const { data, error } = await supabaseClient.auth.verifyOtp({ email, token, type: "email" });
-      if (error) throw error;
-      authUser = data.user;
-      updateAuthUI();
-      hideModal();
-      toast("登录成功");
-      await pullAndMerge();
-    } catch (e) {
-      toast("验证失败：" + (e.message || e));
-    }
-  });
-  $("authCancel").addEventListener("click", hideModal);
-}
-
-function showAuthPasswordUI(email) {
-  showModal(`
-    <div class="auth-head">邮箱密码登录</div>
-    <p class="auth-desc">已有账号直接登录；没有账号点「注册」立即创建（无需邮件确认）</p>
-    <div class="r-form">
-      <input id="authEmail" class="auth-input" type="email" placeholder="请输入邮箱" inputmode="email" value="${email || ""}">
       <input id="authPass" class="auth-input" type="password" placeholder="密码（至少 8 位）">
     </div>
-    <button class="auth-main" id="authPassLogin">登录</button>
+    <button class="auth-main" id="authLogin">登录</button>
     <div class="auth-alt">
-      <button class="auth-alt-btn auth-strong" id="authPassSignup">没有账号？注册</button>
-      <button class="auth-alt-btn" id="authPassBack">返回</button>
+      <button class="auth-alt-btn auth-strong" id="authSignup">注册新账号</button>
+      <button class="auth-alt-btn" id="authCancel">取消</button>
     </div>`);
   const emailEl = $("authEmail");
   const passEl = $("authPass");
-
-  async function finish(data) {
-    authUser = data.user;
-    updateAuthUI();
-    hideModal();
-    toast("登录成功，正在同步…");
-    await pullAndMerge();
-  }
-
-  $("authPassLogin").addEventListener("click", async () => {
+  $("authLogin").addEventListener("click", async () => {
     const email = emailEl.value.trim();
     const pass = passEl.value;
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("邮箱格式不正确"); return; }
     if (!pass) { toast("请输入密码"); return; }
+    $("authLogin").disabled = true;
     try {
       const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
       if (error) throw error;
-      await finish(data);
-    } catch (e) {
-      toast("登录失败：" + (e.message || e));
-    }
-  });
-
-  $("authPassSignup").addEventListener("click", async () => {
-    const email = emailEl.value.trim();
-    const pass = passEl.value;
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("邮箱格式不正确"); return; }
-    if (pass.length < 8) { toast("密码至少 8 位"); return; }
-    try {
-      const { data, error } = await supabaseClient.auth.signUp({
-        email, password: pass
-      });
-      if (error) throw error;
-      if (!data.user) {
-        toast("已提交注册，请查收确认邮件");
-        return;
-      }
-      await finish(data);
+      authUser = data.user;
+      updateAuthUI();
+      hideModal();
+      toast("登录成功，正在同步…");
+      await pullAndMerge();
     } catch (e) {
       const msg = e.message || e;
-      toast(msg.includes("already registered") ? "该邮箱已注册，请直接登录" : "注册失败：" + msg);
+      toast(msg.includes("Invalid login") ? "邮箱或密码不正确" : "登录失败：" + msg);
     }
+    $("authLogin").disabled = false;
   });
+  $("authSignup").addEventListener("click", () => showAuthSignupUI(emailEl.value));
+  $("authCancel").addEventListener("click", hideModal);
+}
 
-  $("authPassBack").addEventListener("click", () => showAuthModal());
+/* 注册流程：① 邮箱收 6 位验证码 ② 验证码 + 设密码 → 完成注册（忘记密码时同样走此流程重设） */
+function showAuthSignupUI(email) {
+  showModal(`
+    <div class="auth-head">注册新账号</div>
+    <p class="auth-desc">① 输入邮箱发送验证码<br>② 填入验证码并设置密码 → 完成注册</p>
+    <div class="r-form">
+      <div class="row2">
+        <input id="suEmail" class="auth-input" type="email" placeholder="邮箱" inputmode="email" value="${email || ""}">
+        <button class="r-btn ghost" id="suSend" style="white-space:nowrap">发送验证码</button>
+      </div>
+      <input id="suCode" class="auth-input" type="text" placeholder="6 位邮箱验证码" inputmode="numeric" style="display:none">
+      <input id="suPass" class="auth-input" type="password" placeholder="设置密码（至少 8 位）">
+    </div>
+    <button class="auth-main" id="suDone">完成注册</button>
+    <div class="auth-alt">
+      <button class="auth-alt-btn" id="suBack">返回登录</button>
+      <button class="auth-alt-btn" id="suCancel">取消</button>
+    </div>`);
+  const emailEl = $("suEmail");
+  const codeEl = $("suCode");
+  const passEl = $("suPass");
+  let sent = false;
+  $("suSend").addEventListener("click", async () => {
+    const email = emailEl.value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("邮箱格式不正确"); return; }
+    $("suSend").disabled = true;
+    $("suSend").textContent = "发送中…";
+    try {
+      const { error } = await supabaseClient.auth.signInWithOtp({ email });
+      if (error) throw error;
+      sent = true;
+      codeEl.style.display = "block";
+      codeEl.focus();
+      $("suSend").textContent = "重新发送";
+      toast("验证码已发送，请查收邮箱（留意垃圾箱）");
+    } catch (e) {
+      toast("发送失败：" + (e.message || e));
+    }
+    $("suSend").disabled = false;
+  });
+  $("suDone").addEventListener("click", async () => {
+    const email = emailEl.value.trim();
+    const token = codeEl.value.trim();
+    const pass = passEl.value;
+    if (!sent) { toast("请先发送验证码"); return; }
+    if (!token) { toast("请输入验证码"); return; }
+    if (pass.length < 8) { toast("密码至少 8 位"); return; }
+    $("suDone").disabled = true;
+    $("suDone").textContent = "注册中…";
+    try {
+      const { data, error } = await supabaseClient.auth.verifyOtp({ email, token, type: "email" });
+      if (error) throw error;
+      authUser = data.user;
+      const { error: perr } = await supabaseClient.auth.updateUser({ password: pass });
+      if (perr) {
+        updateAuthUI();
+        hideModal();
+        toast("注册成功，但密码设置失败：" + (perr.message || perr));
+        await pullAndMerge();
+        return;
+      }
+      updateAuthUI();
+      hideModal();
+      toast("注册成功，正在同步…");
+      await pullAndMerge();
+    } catch (e) {
+      toast("注册失败：" + (e.message || e));
+    }
+    $("suDone").disabled = false;
+    $("suDone").textContent = "完成注册";
+  });
+  $("suBack").addEventListener("click", () => showAuthModal());
+  $("suCancel").addEventListener("click", hideModal);
 }
 
 let catalog = null;
