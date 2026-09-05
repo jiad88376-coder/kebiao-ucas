@@ -84,4 +84,4 @@ node test/test.js
 - **Netlify（主入口，国内直连）**：连接仓库 main 分支自动部署；Functions 自动启用
 - **GitHub Pages（备用）**：仓库 Settings → Pages → Source 选 main / (root)
 
-推送 main 分支后两边都会自动更新。改动静态资源（app.js / style.css 等）时把 `sw.js` 的 `CACHE` 版本号 +1，老客户端才能拿到新代码。
+推送 main 分支后两边都会自动更新。Service Worker 策略：页面/JS/样式**网络优先**（在线打开即最新版，离线用缓存）；课程库等大文件缓存优先。因此只有改 `data/catalog.json`、`vendor/` 或图标时才需要把 `sw.js` 的 `CACHE` 版本号 +1。
