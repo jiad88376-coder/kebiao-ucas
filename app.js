@@ -201,8 +201,8 @@ function updateAuthUI() {
 function showAuthModal() {
   if (authUser) {
     showModal(`
-      <h3>已登录</h3>
-      <p>账号：${authUser.email}<br><span style="color:var(--muted);font-size:13px">课表与笔记已云同步，手机/电脑登录同一账号即可互通。</span></p>
+      <div class="auth-head">已登录 ✓</div>
+      <p class="auth-desc">账号：${authUser.email}<br>课表与笔记已云同步，手机/电脑登录同一账号即可互通。</p>
       <div class="modal-actions">
         <button class="ok" id="authSync">立即同步</button>
         <button class="cancel" id="authOut">退出登录</button>
@@ -222,18 +222,16 @@ function showAuthModal() {
     return;
   }
   showModal(`
-    <h3>登录以云同步</h3>
-    <p style="color:var(--muted);font-size:13px">选择一种方式：邮箱链接 / 验证码 / 密码登录。<br>三类方式都可注册并登录（确认邮箱已关闭，无需邮件点链接）。</p>
+    <div class="auth-head">☁ 登录以云同步</div>
+    <p class="auth-desc">课表、笔记、作业、考试自动同步<br>手机与电脑登录同一账号即可互通</p>
     <div class="r-form">
-      <input id="authEmail" type="email" placeholder="邮箱（如 123@qq.com）" inputmode="email">
+      <input id="authEmail" class="auth-input" type="email" placeholder="请输入邮箱，如 123@qq.com" inputmode="email">
     </div>
-    <div class="modal-actions">
-      <button class="ok" id="authOk">发送登录链接</button>
-      <button class="cancel" id="authCancel">取消</button>
-    </div>
-    <div class="modal-actions" style="margin-top:6px">
-      <button class="cancel" id="authCodeMode">改用验证码登录</button>
-      <button class="cancel" id="authPassMode">改用密码登录</button>
+    <button class="auth-main" id="authOk">发送登录链接</button>
+    <div class="auth-alt">
+      <button class="auth-alt-btn" id="authCodeMode">验证码登录</button>
+      <button class="auth-alt-btn" id="authPassMode">邮箱密码登录</button>
+      <button class="auth-alt-btn" id="authCancel">取消</button>
     </div>`);
   const emailEl = $("authEmail");
   $("authCodeMode").addEventListener("click", () => showAuthCodeUI(emailEl.value));
@@ -242,6 +240,7 @@ function showAuthModal() {
     const email = emailEl.value.trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("邮箱格式不正确"); return; }
     $("authOk").disabled = true;
+    $("authOk").textContent = "发送中…";
     try {
       const { error } = await supabaseClient.auth.signInWithOtp({
         email,
@@ -254,24 +253,26 @@ function showAuthModal() {
       toast("发送失败：" + (e.message || e));
     }
     $("authOk").disabled = false;
+    $("authOk").textContent = "发送登录链接";
   });
   $("authCancel").addEventListener("click", hideModal);
 }
 
 function showAuthCodeUI(email) {
   showModal(`
-    <h3>验证码登录</h3>
-    <p style="color:var(--muted);font-size:13px">输入邮箱 → 收 6 位验证码 → 登录</p>
+    <div class="auth-head">验证码登录</div>
+    <p class="auth-desc">输入邮箱，收到 6 位数字验证码后完成登录</p>
     <div class="r-form">
-      <input id="authEmail" type="email" placeholder="邮箱" inputmode="email" value="${email || ""}">
+      <input id="authEmail" class="auth-input" type="email" placeholder="请输入邮箱" inputmode="email" value="${email || ""}">
       <div class="row2">
-        <input id="authCode" type="text" placeholder="6位验证码" inputmode="numeric" style="display:none">
+        <input id="authCode" class="auth-input" type="text" placeholder="6 位验证码" inputmode="numeric" style="display:none">
         <button class="r-btn ghost" id="authSend">发送验证码</button>
       </div>
     </div>
-    <div class="modal-actions">
-      <button class="ok" id="authOk">登录</button>
-      <button class="cancel" id="authCancel">取消</button>
+    <button class="auth-main" id="authOk">登录</button>
+    <div class="auth-alt">
+      <button class="auth-alt-btn" id="authBack">返回</button>
+      <button class="auth-alt-btn" id="authCancel">取消</button>
     </div>`);
   const emailEl = $("authEmail");
   const codeEl = $("authCode");
@@ -292,6 +293,7 @@ function showAuthCodeUI(email) {
     }
     $("authSend").disabled = false;
   });
+  $("authBack").addEventListener("click", () => showAuthModal());
   $("authOk").addEventListener("click", async () => {
     const email = emailEl.value.trim();
     const token = codeEl.value.trim();
@@ -314,18 +316,16 @@ function showAuthCodeUI(email) {
 
 function showAuthPasswordUI(email) {
   showModal(`
-    <h3>邮箱密码登录</h3>
-    <p style="color:var(--muted);font-size:13px">已有账号直接登录；没有账号用它注册（立即生效，无需邮件确认）。</p>
+    <div class="auth-head">邮箱密码登录</div>
+    <p class="auth-desc">已有账号直接登录；没有账号点「注册」立即创建（无需邮件确认）</p>
     <div class="r-form">
-      <input id="authEmail" type="email" placeholder="邮箱" inputmode="email" value="${email || ""}">
-      <input id="authPass" type="password" placeholder="密码（至少 8 位）">
+      <input id="authEmail" class="auth-input" type="email" placeholder="请输入邮箱" inputmode="email" value="${email || ""}">
+      <input id="authPass" class="auth-input" type="password" placeholder="密码（至少 8 位）">
     </div>
-    <div class="modal-actions">
-      <button class="ok" id="authPassLogin">登录</button>
-      <button class="cancel" id="authPassSignup">注册</button>
-    </div>
-    <div class="modal-actions" style="margin-top:6px">
-      <button class="cancel" id="authPassBack">返回其他方式</button>
+    <button class="auth-main" id="authPassLogin">登录</button>
+    <div class="auth-alt">
+      <button class="auth-alt-btn auth-strong" id="authPassSignup">没有账号？注册</button>
+      <button class="auth-alt-btn" id="authPassBack">返回</button>
     </div>`);
   const emailEl = $("authEmail");
   const passEl = $("authPass");
