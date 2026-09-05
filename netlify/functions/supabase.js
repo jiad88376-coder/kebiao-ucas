@@ -61,7 +61,8 @@ exports.handler = async (event) => {
 
   const path = (event.path || "").replace(new RegExp("^" + FUNC_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "");
   if (!path) return { statusCode: 404, headers: CORS_HEADERS, body: "not found" };
-  const target = TARGET_BASE + path;
+  /* 必须透传查询串: token 接口依赖 ?grant_type=password / refresh_token / pkce */
+  const target = TARGET_BASE + path + (event.rawQuery ? "?" + event.rawQuery : "");
 
   const headers = {};
   for (const [k, v] of Object.entries(event.headers || {})) {
