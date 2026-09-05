@@ -315,7 +315,7 @@ function showAuthSignupUI(email) {
           <input id="suEmail" class="auth-input" type="email" placeholder="邮箱地址" inputmode="email" autocomplete="email" value="${email || ""}">
           <button class="r-btn ghost" id="suSend" style="white-space:nowrap">发送验证码</button>
         </div>
-        <input id="suCode" class="auth-input code" type="text" placeholder="6 位邮箱验证码" inputmode="numeric" maxlength="6" autocomplete="one-time-code" style="display:none">
+        <input id="suCode" class="auth-input code" type="text" placeholder="邮箱验证码（6-8 位）" inputmode="numeric" maxlength="8" autocomplete="one-time-code" style="display:none">
         <input id="suPass" class="auth-input" type="password" placeholder="设置密码（至少 8 位）" autocomplete="new-password" style="display:none">
       </div>
       <button class="auth-main" id="suDone">完成注册</button>
