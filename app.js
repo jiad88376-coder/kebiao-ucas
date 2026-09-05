@@ -112,19 +112,6 @@ function fmtWeekRange(week) {
   return (a.getMonth() + 1) + "." + a.getDate() + " - " + (b.getMonth() + 1) + "." + b.getDate();
 }
 
-function currentPeriod() {
-  const now = new Date();
-  const hm = now.getHours() * 60 + now.getMinutes();
-  const t = { "1": [510, 555], "2": [560, 605], "3": [625, 670], "4": [675, 720],
-              "5": [810, 855], "6": [860, 905], "7": [925, 970], "8": [975, 1020],
-              "9": [1025, 1070], "10": [1110, 1155], "11": [1160, 1205], "12": [1215, 1260], "13": [1265, 1310] };
-  for (const p of Object.keys(t)) {
-    const [a, b] = t[p];
-    if (hm >= a && hm <= b + 5) return Number(p);
-  }
-  return 0;
-}
-
 /* 剩余天数（负数=已过/逾期；0=今天） */
 function daysLeft(dateStr) {
   if (!dateStr) return null;
@@ -501,8 +488,6 @@ function showBanner(text, warn) {
   b.appendChild(ul);
   b.classList.remove("hidden");
 }
-function hideBanner() { $("banner").classList.add("hidden"); }
-
 /* ---------------- 渲染：周课表 ---------------- */
 function curWeek() { return getSemesterWeek(new Date()); }
 
