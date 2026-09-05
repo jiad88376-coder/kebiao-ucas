@@ -130,6 +130,21 @@ button { font-family: inherit; }
 }
 .wk-all:active { background: #eef2fa; }
 
+/* ---------- 星期聚焦条（仅手机端） ---------- */
+.daytabs { display: none; }
+.day-chip {
+  flex: 1 0 auto; height: 32px; padding: 0 6px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--card); color: #4a5568;
+  font-size: 13.5px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+}
+.day-chip .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--primary); }
+.day-chip.active {
+  background: var(--primary); border-color: var(--primary);
+  color: #fff; font-weight: 600;
+}
+.day-chip:active { filter: brightness(.94); }
+
 /* ---------- 周课表 ---------- */
 .gridwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; background: var(--card);
   border-radius: var(--radius); border: 1px solid var(--line); position: relative; }
@@ -342,12 +357,29 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
   .modal-actions button { padding: 13px; }
 
   /* 手机端周次条 */
-  .weekbar { gap: 5px; margin: 8px 0; }
+  .weekbar { gap: 5px; margin: 8px 0 6px; }
   .wk-btn { width: 32px; height: 32px; font-size: 16px; }
   .wk-label { height: 32px; font-size: 13px; gap: 5px; padding: 0 6px; }
   .wk-label .wk-range { font-size: 10px; }
   .wk-label .wk-now { font-size: 9px; padding: 1px 4px; }
   .wk-all { height: 32px; padding: 0 9px; font-size: 12px; }
+
+  /* 星期聚焦条 + 单日大列 */
+  .daytabs { display: flex; gap: 6px; margin: 0 0 8px; }
+  #grid { min-width: 0; }
+  #grid thead th { width: 88px; }
+  #grid.single { min-width: 0; width: 100%; }
+  #grid.single thead th { width: auto; }
+  #grid.single thead th.time-col, #grid.single td.time-col { width: 40px; }
+  #grid.single td.time-col .tp-time { display: none; }
+
+  /* 顶栏紧凑化 */
+  .topbar { padding: 8px 10px; }
+  .top-actions { gap: 4px; }
+  .icon-btn { padding: 6px 8px; font-size: 12px; }
+  .brand-text { font-size: 15px; }
+  .term-badge { font-size: 10px; padding: 2px 6px; }
+  .legend { font-size: 10px; gap: 8px; }
 }
 
 /* ---------- Toast ---------- */

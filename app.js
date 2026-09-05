@@ -137,6 +137,8 @@ function daysLeft(dateStr) {
 const STORE_KEY = "kebiao:ucas:v1";
 const CATALOG_URL = "./data/catalog.json";
 let viewWeek = getSemesterWeek(new Date()); // 默认显示本周；null=全部周次
+/* 手机端默认聚焦今天那一列(0=全周)；桌面端全周 */
+let viewDay = (typeof document !== "undefined" && window.innerWidth <= 640) ? dayIndexOfToday() : 0;
 
 /* ---------------- 云同步 (Supabase, 经 Netlify Function 反代) ---------------- */
 /* 直连 *.supabase.co 在国内被 GFW 阻断，统一经 Netlify Function 转发。
@@ -508,6 +510,7 @@ function render() {
   const hasCourses = state.codes.length > 0;
   hasCourses ? showMain() : showWelcome();
   renderWeekbar();
+  renderDayTabs();
   renderGrid();
   const total = state.codes.reduce((s, c) => {
     const x = courseMap[c];
@@ -549,6 +552,24 @@ function smartDefaultWeek() {
   return w0;
 }
 
+/* 星期聚焦条（仅手机端显示）：全周 / 一 / 二 / ... / 日 */
+function renderDayTabs() {
+  const box = $("daytabs");
+  box.innerHTML = "";
+  const t = dayIndexOfToday();
+  const all = el("button", "day-chip" + (viewDay === 0 ? " active" : ""));
+  all.textContent = "全周";
+  all.addEventListener("click", () => { viewDay = 0; render(); });
+  box.appendChild(all);
+  for (let d = 1; d <= 7; d++) {
+    const b = el("button", "day-chip" + (viewDay === d ? " active" : ""));
+    b.appendChild(el("span", "", DAY_NAMES[d - 1].slice(1)));
+    if (d === t && viewDay !== d) b.appendChild(el("span", "dot"));
+    b.addEventListener("click", () => { viewDay = d; render(); });
+    box.appendChild(b);
+  }
+}
+
 function renderGrid() {
   const grid = $("grid");
   const allCourses = state.codes.map(c => courseMap[c]).filter(Boolean);
@@ -580,12 +601,13 @@ function renderGrid() {
     }
   }
 
-  /* 计算每节课的放置：起点(row,col) + 跨节 span；同格冲突则叠加 */
+  /* 计算每节课的放置：起点(row,col) + 跨节 span；同格冲突则叠加；日聚焦时只放当天 */
   const starts = {};   // "row-col" -> [{course, session, span}]
   const covered = {};  // "row-col" -> true (被 rowspan 覆盖)
   const placed = new Set();
   for (const c of courses) {
     for (const s of c.sessions) {
+      if (viewDay && s.day !== viewDay) continue;
       if (!(s.day >= 1 && s.day <= 7 && s.p1 >= 1 && s.p2 >= s.p1 && s.p2 <= 13)) continue;
       const key = `${c.code}|${s.day}|${s.p1}|${s.p2}|${s.weeks}`;
       if (placed.has(key)) continue;
@@ -601,6 +623,7 @@ function renderGrid() {
   const hr = el("tr");
   hr.appendChild(el("th", "time-col", ""));
   for (let d = 1; d <= 7; d++) {
+    if (viewDay && d !== viewDay) continue;
     const th = el("th", showToday && d === today ? "today" : "");
     th.appendChild(el("span", "th-day", DAY_NAMES[d - 1]));
     if (weekDates) th.appendChild(el("span", "th-date", weekDates[d - 1]));
@@ -617,6 +640,7 @@ function renderGrid() {
     tc.appendChild(el("div", "tp-time", (PERIOD_TIMES[p] || "").split("-").join("–")));
     tr.appendChild(tc);
     for (let d = 1; d <= 7; d++) {
+      if (viewDay && d !== viewDay) continue;
       const sk = `${p}-${d}`;
       if (covered[sk] && !starts[sk]) continue; // 由跨节行占位
       const td = el("td", "day-cell" + (showToday && d === today ? " today-col" : ""));
@@ -635,13 +659,23 @@ function renderGrid() {
   }
 
   grid.innerHTML = "";
+  grid.classList.toggle("single", !!viewDay);
   grid.appendChild(thead);
   grid.appendChild(tbody);
 
-  /* 本周无任何课时给个提示 */
+  /* 空 周 / 日 提示 */
   const empty = $("gridEmpty");
   if (empty) {
-    empty.classList.toggle("hidden", !(viewWeek != null && courses.length === 0 && allCourses.length > 0));
+    const weekEmpty = viewWeek != null && courses.length === 0 && allCourses.length > 0;
+    const dayEmpty = !weekEmpty && viewDay > 0 && allCourses.length > 0 &&
+      !courses.some(c => (c.sessions || []).some(s => s.day === viewDay));
+    if (weekEmpty) {
+      empty.innerHTML = "本周没有安排课程<br><span>点上方「全部周次」可查看整学期课表</span>";
+    } else if (dayEmpty) {
+      empty.innerHTML = (viewDay === dayIndexOfToday() ? "今天没有课程安排 🎉" : "该日没有课程安排") +
+        "<br><span>点上方其他星期或「全周」查看更多</span>";
+    }
+    empty.classList.toggle("hidden", !(weekEmpty || dayEmpty));
   }
 }
 
