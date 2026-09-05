@@ -66,5 +66,19 @@ const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 ok(app.daysLeft(tomorrow) === 1, "明天=1天");
 ok(app.daysLeft(yesterday) === -1, "昨天=-1天");
 
+console.log("== 学期周次 ==");
+ok(app.SEMESTER_MONDAY === "2026-08-31", "第1周周一=2026-08-31");
+ok(app.getSemesterWeek(new Date(2026, 8, 5)) === 1, "2026-09-05(周六)=第1周");
+ok(app.getSemesterWeek(new Date(2026, 8, 6)) === 1, "2026-09-06(周日)=第1周");
+ok(app.getSemesterWeek(new Date(2026, 8, 7)) === 2, "2026-09-07(周一)=第2周");
+ok(app.getSemesterWeek(new Date(2026, 7, 30)) === 1, "开学前(8-30)按第1周");
+ok(app.getSemesterWeek(new Date(2026, 11, 31)) === 18, "2026-12-31=第18周");
+ok(app.inWeekSet([[2, 5], [7, 12]], 1) === false, "第1周不在 2-5,7-12");
+ok(app.inWeekSet([[2, 5], [7, 12]], 3) === true, "第3周在 2-5,7-12");
+ok(app.inWeekSet([[2, 5], [7, 12]], 6) === false, "第6周不在(断档)");
+ok(app.inWeekSet([[2, 5], [7, 12]], 8) === true, "第8周在 7-12");
+ok(app.inWeekSet(null, 5) === true, "缺失周次保守显示");
+ok(typeof app.fmtWeekRange(1) === "string" && /\./.test(app.fmtWeekRange(1)), "周区间格式化");
+
 console.log(`\n通过 ${passed} 项测试`);
 if (process.exitCode) { console.error("存在失败项"); process.exit(1); }

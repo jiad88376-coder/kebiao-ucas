@@ -81,6 +81,37 @@ function dayIndexOfToday() {
   return ((new Date().getDay() + 6) % 7) + 1; // 周一=1 ... 周日=7
 }
 
+/* ---------------- 学期周次 ---------------- */
+const SEMESTER_MONDAY = "2026-08-31"; // 第 1 周周一
+const MAX_WEEK = 25;
+
+function parseYMD(s) {
+  const [y, m, d] = String(s).split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+/* 当前日期处于第几教学周（开学前按第 1 周，之后封顶 MAX_WEEK） */
+function getSemesterWeek(date) {
+  const mon = parseYMD(SEMESTER_MONDAY);
+  const d0 = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diff = Math.floor((d0 - mon) / 604800000);
+  return Math.min(MAX_WEEK, Math.max(1, diff + 1));
+}
+/* 某 session 的 weekSet 是否包含周 w（缺失视为包含，保守显示） */
+function inWeekSet(weekSet, w) {
+  if (!Array.isArray(weekSet) || !weekSet.length) return true;
+  return weekSet.some(r => w >= r[0] && w <= r[1]);
+}
+function weekMonday(week) {
+  const d = parseYMD(SEMESTER_MONDAY);
+  d.setDate(d.getDate() + 7 * (week - 1));
+  return d;
+}
+function fmtWeekRange(week) {
+  const a = weekMonday(week);
+  const b = weekMonday(week); b.setDate(b.getDate() + 6);
+  return (a.getMonth() + 1) + "." + a.getDate() + " - " + (b.getMonth() + 1) + "." + b.getDate();
+}
+
 function currentPeriod() {
   const now = new Date();
   const hm = now.getHours() * 60 + now.getMinutes();
@@ -105,6 +136,7 @@ function daysLeft(dateStr) {
 /* ---------------- 应用状态 ---------------- */
 const STORE_KEY = "kebiao:ucas:v1";
 const CATALOG_URL = "./data/catalog.json";
+let viewWeek = getSemesterWeek(new Date()); // 默认显示本周；null=全部周次
 
 /* ---------------- 云同步 (Supabase, 经 Netlify Function 反代) ---------------- */
 /* 直连 *.supabase.co 在国内被 GFW 阻断，统一经 Netlify Function 转发。
@@ -470,9 +502,12 @@ function showBanner(text, warn) {
 function hideBanner() { $("banner").classList.add("hidden"); }
 
 /* ---------------- 渲染：周课表 ---------------- */
+function curWeek() { return getSemesterWeek(new Date()); }
+
 function render() {
   const hasCourses = state.codes.length > 0;
   hasCourses ? showMain() : showWelcome();
+  renderWeekbar();
   renderGrid();
   const total = state.codes.reduce((s, c) => {
     const x = courseMap[c];
@@ -482,9 +517,46 @@ function render() {
     ? catalog.meta.term : "";
 }
 
+/* 周次切换条 */
+function renderWeekbar() {
+  const label = $("wkLabel");
+  label.innerHTML = "";
+  if (viewWeek == null) {
+    label.appendChild(el("span", "", "全部周次"));
+  } else {
+    label.appendChild(el("span", "", "第 " + viewWeek + " 周"));
+    label.appendChild(el("span", "wk-range", fmtWeekRange(viewWeek)));
+    if (viewWeek === curWeek()) label.appendChild(el("span", "wk-now", "本周"));
+  }
+  $("wkAll").textContent = viewWeek == null ? "回到本周" : "全部周次";
+  $("wkPrev").disabled = viewWeek != null && viewWeek <= 1;
+  $("wkNext").disabled = viewWeek != null && viewWeek >= MAX_WEEK;
+}
+
+/* 本周是否有课；没有则顺延到最近的有课周（默认视图用） */
+function hasSessionsInWeek(w) {
+  return state.codes.some(code => {
+    const c = courseMap[code];
+    return c && (c.sessions || []).some(s => inWeekSet(s.weekSet, w));
+  });
+}
+function smartDefaultWeek() {
+  const w0 = curWeek();
+  if (hasSessionsInWeek(w0)) return w0;
+  for (let w = w0 + 1; w <= MAX_WEEK; w++) {
+    if (hasSessionsInWeek(w)) return w;
+  }
+  return w0;
+}
+
 function renderGrid() {
   const grid = $("grid");
-  const courses = state.codes.map(c => courseMap[c]).filter(Boolean);
+  const allCourses = state.codes.map(c => courseMap[c]).filter(Boolean);
+  /* 本周视图: 仅保留命中该周次的时段 */
+  const courses = viewWeek == null ? allCourses
+    : allCourses
+      .map(c => ({ ...c, sessions: (c.sessions || []).filter(s => inWeekSet(s.weekSet, viewWeek)) }))
+      .filter(c => c.sessions.length);
   const conflicts = findConflicts(courses);
   const conflictCodes = new Set();
   for (const cf of conflicts) { conflictCodes.add(cf.a.code); conflictCodes.add(cf.b.code); }
@@ -497,6 +569,16 @@ function renderGrid() {
   }
 
   const today = dayIndexOfToday();
+  const showToday = viewWeek == null || viewWeek === curWeek();
+  /* 本周视图下表头附带日期 */
+  let weekDates = null;
+  if (viewWeek != null) {
+    weekDates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = weekMonday(viewWeek); d.setDate(d.getDate() + i);
+      weekDates.push((d.getMonth() + 1) + "/" + d.getDate());
+    }
+  }
 
   /* 计算每节课的放置：起点(row,col) + 跨节 span；同格冲突则叠加 */
   const starts = {};   // "row-col" -> [{course, session, span}]
@@ -519,9 +601,10 @@ function renderGrid() {
   const hr = el("tr");
   hr.appendChild(el("th", "time-col", ""));
   for (let d = 1; d <= 7; d++) {
-    const th = el("th", d === today ? "today" : "");
+    const th = el("th", showToday && d === today ? "today" : "");
     th.appendChild(el("span", "th-day", DAY_NAMES[d - 1]));
-    if (d === today) th.appendChild(el("span", "th-today", "今日"));
+    if (weekDates) th.appendChild(el("span", "th-date", weekDates[d - 1]));
+    if (showToday && d === today) th.appendChild(el("span", "th-today", "今日"));
     hr.appendChild(th);
   }
   thead.appendChild(hr);
@@ -536,12 +619,12 @@ function renderGrid() {
     for (let d = 1; d <= 7; d++) {
       const sk = `${p}-${d}`;
       if (covered[sk] && !starts[sk]) continue; // 由跨节行占位
-      const td = el("td", "day-cell" + (d === today ? " today-col" : ""));
+      const td = el("td", "day-cell" + (showToday && d === today ? " today-col" : ""));
       const list = starts[sk];
       if (list && list.length) {
         td.rowSpan = list[0].span;
         for (const gc of list) {
-          const block = buildCourseBlock(gc.course, gc.session, conflictSess);
+          const block = buildCourseBlock(gc.course, gc.session, conflictSess, viewWeek != null);
           block.addEventListener("click", () => openDrawer(gc.course.code));
           td.appendChild(block);
         }
@@ -554,10 +637,16 @@ function renderGrid() {
   grid.innerHTML = "";
   grid.appendChild(thead);
   grid.appendChild(tbody);
+
+  /* 本周无任何课时给个提示 */
+  const empty = $("gridEmpty");
+  if (empty) {
+    empty.classList.toggle("hidden", !(viewWeek != null && courses.length === 0 && allCourses.length > 0));
+  }
 }
 
-/* 课程块：课程名 / 教师·教室 / 周次（对齐 Excel 版） */
-function buildCourseBlock(course, session, conflictSess) {
+/* 课程块：课程名 / 教师·教室 / 周次（对齐 Excel 版）；周视图下不重复显示周次 */
+function buildCourseBlock(course, session, conflictSess, weekView) {
   const isConflict = conflictSess.has(`${session.day}-${session.p1}-${session.p2}`);
   const block = el("div", "course-cell " + attrClass(course.attr) + (isConflict ? " conflict" : ""));
   block.appendChild(el("div", "cc-name", course.name));
@@ -565,7 +654,7 @@ function buildCourseBlock(course, session, conflictSess) {
   if (course.teacher) meta.push(course.teacher);
   if (session.room) meta.push(session.room);
   if (meta.length) block.appendChild(el("div", "cc-meta", meta.join(" · ")));
-  block.appendChild(el("div", "cc-weeks", session.weeks));
+  if (!weekView) block.appendChild(el("div", "cc-weeks", session.weeks));
   if (isConflict) block.appendChild(el("span", "cc-conflict-tag", "冲突"));
   return block;
 }
@@ -1007,6 +1096,26 @@ function init() {
   $("btnCodes").addEventListener("click", showCodesModal);
   $("btnShare").addEventListener("click", shareLink);
   $("btnLogin").addEventListener("click", showAuthModal);
+
+  /* 周次切换条 */
+  $("wkPrev").addEventListener("click", () => {
+    if (viewWeek == null) viewWeek = curWeek();
+    viewWeek = Math.max(1, viewWeek - 1);
+    render();
+  });
+  $("wkNext").addEventListener("click", () => {
+    if (viewWeek == null) viewWeek = curWeek();
+    viewWeek = Math.min(MAX_WEEK, viewWeek + 1);
+    render();
+  });
+  $("wkAll").addEventListener("click", () => {
+    viewWeek = viewWeek == null ? curWeek() : null;
+    render();
+  });
+  $("wkLabel").addEventListener("click", () => {
+    viewWeek = curWeek();
+    render();
+  });
   $("btnBackup").addEventListener("click", () => {
     showModal(`
       <h3>备份与恢复</h3>
@@ -1032,6 +1141,16 @@ function init() {
       </div>`);
     $("shOk").addEventListener("click", () => { hideModal(); addCodes(shared); });
     $("shCancel").addEventListener("click", hideModal);
+  }
+
+  /* 默认视图: 本周；本周无课则顺延到最近有课的周 */
+  if (state.codes.length) {
+    const w0 = curWeek();
+    const w = smartDefaultWeek();
+    if (w !== w0) {
+      viewWeek = w;
+      setTimeout(() => toast("第" + w0 + "周无课，已显示第" + w + "周"), 600);
+    }
   }
 
   render();
@@ -1069,6 +1188,7 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     normalizeCode, parseCodes, weeksOverlap, sessionOverlap,
-    conflictsBetween, findConflicts, fmtSession, daysLeft, DAY_NAMES, PERIOD_TIMES
+    conflictsBetween, findConflicts, fmtSession, daysLeft, DAY_NAMES, PERIOD_TIMES,
+    getSemesterWeek, inWeekSet, fmtWeekRange, SEMESTER_MONDAY, MAX_WEEK
   };
 }

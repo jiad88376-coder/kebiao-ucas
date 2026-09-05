@@ -102,9 +102,43 @@ button { font-family: inherit; }
 .banner ul { margin: 6px 0 0; padding-left: 18px; }
 .banner li { margin: 2px 0; }
 
+/* ---------- 周次切换条 ---------- */
+.weekbar {
+  display: flex; align-items: center; gap: 6px; margin: 10px 0;
+}
+.wk-btn {
+  width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--card); font-size: 18px; color: #4a5568; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+.wk-btn:disabled { opacity: .35; cursor: default; }
+.wk-btn:not(:disabled):active { background: #eef2fa; }
+.wk-label {
+  flex: 1; min-width: 0; height: 34px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card); display: flex; align-items: center; justify-content: center; gap: 7px;
+  font-size: 14px; font-weight: 700; color: var(--text); cursor: pointer; padding: 0 8px;
+  overflow: hidden; white-space: nowrap;
+}
+.wk-label .wk-range { font-size: 11px; font-weight: 400; color: var(--muted); }
+.wk-label .wk-now {
+  font-size: 10px; font-weight: 600; color: #fff; background: var(--primary);
+  border-radius: 4px; padding: 1px 5px; flex: none;
+}
+.wk-all {
+  height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--card); font-size: 13px; color: #4a5568; cursor: pointer; flex: none;
+}
+.wk-all:active { background: #eef2fa; }
+
 /* ---------- 周课表 ---------- */
 .gridwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; background: var(--card);
-  border-radius: var(--radius); border: 1px solid var(--line); }
+  border-radius: var(--radius); border: 1px solid var(--line); position: relative; }
+.grid-empty {
+  padding: 60px 16px; text-align: center; color: var(--muted); font-size: 14px; line-height: 1.8;
+}
+.grid-empty span { font-size: 12px; }
+#grid thead .th-date { display: block; font-size: 10px; color: var(--muted); margin-top: 1px; }
+#grid thead th.today .th-date { color: rgba(255,255,255,.8); }
 #grid { border-collapse: collapse; min-width: 780px; width: 100%; table-layout: fixed; }
 #grid th, #grid td { border: 1px solid var(--line); }
 #grid thead th {
@@ -306,6 +340,14 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
   .auth-main { padding: 13px; }
   .auth-alt-btn { padding: 11px; font-size: 14px; }
   .modal-actions button { padding: 13px; }
+
+  /* 手机端周次条 */
+  .weekbar { gap: 5px; margin: 8px 0; }
+  .wk-btn { width: 32px; height: 32px; font-size: 16px; }
+  .wk-label { height: 32px; font-size: 13px; gap: 5px; padding: 0 6px; }
+  .wk-label .wk-range { font-size: 10px; }
+  .wk-label .wk-now { font-size: 9px; padding: 1px 4px; }
+  .wk-all { height: 32px; padding: 0 9px; font-size: 12px; }
 }
 
 /* ---------- Toast ---------- */
