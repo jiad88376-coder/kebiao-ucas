@@ -1109,11 +1109,10 @@ if (typeof document !== "undefined") {
 const FILE_MAX = 5 * 1024 * 1024; // 走 Netlify 代理的单文件上限
 let forumCtx = { mode: "list" };
 
-function requireLogin() {
-  if (authUser) return true;
-  toast("请先登录再使用论坛");
+/* 匿名可浏览；发言/下载需要登录，弹出登录框 */
+function promptLogin(msg) {
+  toast(msg || "请先登录");
   showAuthModal();
-  return false;
 }
 function authorShort(s) { return String(s || "").split("@")[0] || "同学"; }
 function mine(uid) { return !!(authUser && uid === authUser.id); }
@@ -1130,14 +1129,9 @@ function fmtTime(ts) {
 function fmtSize(n) {
   return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
 }
-function forumFileURL(p) {
-  return SUPABASE_URL + "/storage/v1/object/public/forum-files/" +
-    String(p).split("/").map(encodeURIComponent).join("/");
-}
 
 function showForum(mode, opts) {
   opts = opts || {};
-  if (!requireLogin()) return;
   forumCtx = Object.assign({ mode: mode || "list" }, opts);
   $("welcome").classList.add("hidden");
   $("main").classList.add("hidden");
@@ -1163,7 +1157,10 @@ function renderForum() {
   head.appendChild(el("span", "fb-title", title));
   if (forumCtx.mode === "list") {
     const nb = el("button", "fb-new", "✚ 发帖");
-    nb.addEventListener("click", composeForumPost);
+    nb.addEventListener("click", () => {
+      if (!authUser) { promptLogin("登录后才能发帖"); return; }
+      composeForumPost();
+    });
     head.appendChild(nb);
   }
   $("forumBody").innerHTML = "";
@@ -1227,6 +1224,17 @@ function delBtn(tip, doDelete, refresh) {
   return b;
 }
 
+function loginBar(text) {
+  const wrap = el("div", "f-compose");
+  const bar = el("div", "f-loginbar");
+  bar.appendChild(el("span", "", text));
+  const b = el("button", "f-login-go", "去登录");
+  b.addEventListener("click", () => showAuthModal());
+  bar.appendChild(b);
+  wrap.appendChild(bar);
+  return wrap;
+}
+
 /* ---- 自由论坛：帖子详情 ---- */
 async function loadForumPost(id) {
   const body = $("forumBody");
@@ -1268,6 +1276,10 @@ async function loadForumPost(id) {
     body.appendChild(rc);
   }
 
+  if (!authUser) {
+    body.appendChild(loginBar("登录后即可回复"));
+    return;
+  }
   const form = el("div", "f-compose");
   const ta = el("textarea");
   ta.placeholder = "写下你的回复…";
@@ -1328,6 +1340,26 @@ function composeForumPost() {
   $("fpCancel").addEventListener("click", hideModal);
 }
 
+/* 登录态下载：带 token 走代理取回文件（私有桶，未登录被服务端拒绝） */
+async function downloadForumFile(p) {
+  try {
+    toast("开始下载…");
+    const { data, error } = await supabaseClient.storage.from("forum-files").download(p.file_path);
+    if (error) throw error;
+    const url = URL.createObjectURL(data);
+    const a = el("a");
+    a.href = url;
+    a.download = p.file_name || "attachment";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast("已下载");
+  } catch (e) {
+    toast("下载失败：" + (e.message || e));
+  }
+}
+
 /* ---- 课程区：讨论与资料 ---- */
 async function loadCourseForum(code) {
   const body = $("forumBody");
@@ -1352,13 +1384,17 @@ async function loadCourseForum(code) {
     card.appendChild(el("div", "f-reply-head", authorShort(p.author) + " · " + fmtTime(p.created_at)));
     if (p.content) card.appendChild(el("div", "f-reply-content", p.content));
     if (p.file_path) {
-      const fc = el("a", "f-file");
-      fc.href = forumFileURL(p.file_path);
-      fc.target = "_blank"; fc.rel = "noopener";
+      const fc = el(authUser ? "button" : "div", "f-file" + (authUser ? " f-file-btn" : ""));
       const nm = el("span", "f-file-name", p.file_name || "附件");
       const sz = el("span", "f-file-size", p.file_size ? " · " + fmtSize(p.file_size) : "");
       fc.appendChild(el("span", "", "📎"));
       fc.appendChild(nm); fc.appendChild(sz);
+      if (authUser) {
+        fc.addEventListener("click", () => downloadForumFile(p));
+      } else {
+        fc.style.cursor = "pointer";
+        fc.addEventListener("click", () => promptLogin("登录后才能下载资料"));
+      }
       card.appendChild(fc);
     }
     const meta = el("div", "f-meta");
@@ -1368,6 +1404,10 @@ async function loadCourseForum(code) {
     body.appendChild(card);
   }
 
+  if (!authUser) {
+    body.appendChild(loginBar("登录后才能发言和上传/下载资料"));
+    return;
+  }
   const form = el("div", "f-compose");
   const ta = el("textarea");
   ta.placeholder = "说点什么，或分享资料…（可只发文件）";

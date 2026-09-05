@@ -47,10 +47,10 @@ alter table public.forum_posts enable row level security;
 alter table public.forum_replies enable row level security;
 alter table public.course_posts enable row level security;
 
--- forum_posts
+-- forum_posts（SELECT 对所有人开放：未登录可浏览；写操作仅登录本人）
 drop policy if exists "forum posts read" on public.forum_posts;
 create policy "forum posts read" on public.forum_posts
-  for select to authenticated using (not is_deleted);
+  for select using (not is_deleted);
 drop policy if exists "forum posts insert" on public.forum_posts;
 create policy "forum posts insert" on public.forum_posts
   for insert to authenticated with check (user_id = auth.uid());
@@ -61,18 +61,19 @@ create policy "forum posts delete" on public.forum_posts
 -- forum_replies
 drop policy if exists "forum replies read" on public.forum_replies;
 create policy "forum replies read" on public.forum_replies
-  for select to authenticated using (not is_deleted);
+  for select using (not is_deleted);
 drop policy if exists "forum replies insert" on public.forum_replies;
 create policy "forum replies insert" on public.forum_replies
   for insert to authenticated with check (user_id = auth.uid());
-drop policy if exists "forum replies delete" on public.forum_replies;
+drop policy if exists "forum replies delete" on public.forum_replies
+  ;
 create policy "forum replies delete" on public.forum_replies
   for delete to authenticated using (user_id = auth.uid());
 
 -- course_posts
 drop policy if exists "course posts read" on public.course_posts;
 create policy "course posts read" on public.course_posts
-  for select to authenticated using (not is_deleted);
+  for select using (not is_deleted);
 drop policy if exists "course posts insert" on public.course_posts;
 create policy "course posts insert" on public.course_posts
   for insert to authenticated with check (user_id = auth.uid());
@@ -80,10 +81,14 @@ drop policy if exists "course posts delete" on public.course_posts;
 create policy "course posts delete" on public.course_posts
   for delete to authenticated using (user_id = auth.uid());
 
--- 存储桶：forum-files（公开读）
+-- 存储桶：forum-files（私有桶：仅登录用户可读取下载，匿名下载被服务端拒绝）
 insert into storage.buckets (id, name, public)
-values ('forum-files', 'forum-files', true)
-on conflict (id) do nothing;
+values ('forum-files', 'forum-files', false)
+on conflict (id) do update set public = false;
+
+drop policy if exists "forum files read" on storage.objects;
+create policy "forum files read" on storage.objects
+  for select to authenticated using (bucket_id = 'forum-files');
 
 drop policy if exists "forum files upload" on storage.objects;
 create policy "forum files upload" on storage.objects
