@@ -122,6 +122,7 @@ function daysLeft(dateStr) {
 
 /* ---------------- 应用状态 ---------------- */
 const STORE_KEY = "kebiao:ucas:v1";
+const LAST_MODIFIED_KEY = "kebiao:ucas:v1:mtime";
 const CATALOG_URL = "./data/catalog.json";
 let viewWeek = getSemesterWeek(new Date()); // 默认显示本周；null=全部周次
 /* 手机端默认聚焦今天那一列(0=全周)；桌面端全周 */
@@ -169,7 +170,7 @@ async function pullFromCloud() {
   if (!supabaseClient || !authUser) return null;
   try {
     const { data } = await supabaseClient.from("user_data")
-      .select("schedule,records").eq("user_id", authUser.id).maybeSingle();
+      .select("schedule,records,updated_at").eq("user_id", authUser.id).maybeSingle();
     return data || null;
   } catch (e) { console.warn("pull failed", e); return null; }
 }
@@ -182,36 +183,28 @@ function applyCloud(cloud) {
   render();
 }
 
-/* 登录后的数据合并：两端都有数据时让用户选择方向 */
+/* 登录后的数据合并：两端都有数据时按修改时间静默取舍（新的一方胜出），不再弹窗 */
 async function pullAndMerge() {
   const cloud = await pullFromCloud();
   const localHas = state.codes.length > 0;
-  const cloudHas = !!(cloud && cloud.schedule && cloud.schedule.codes && cloud.schedule.codes.length);
-  if (cloudHas && localHas) {
-    showModal(`
-      <h3>发现两端都有课表</h3>
-      <p style="color:var(--muted);font-size:13px">
-        本机：${state.codes.length} 门课 &nbsp;·&nbsp; 云端：${cloud.schedule.codes.length} 门课</p>
-      <div class="modal-actions">
-        <button class="ok" id="mgDownload">下载云端（覆盖本机）</button>
-        <button class="cancel" id="mgUpload">上传本机（覆盖云端）</button>
-      </div>`);
-    $("mgDownload").addEventListener("click", async () => {
-      hideModal();
-      applyCloud(cloud);
-      toast("已下载云端课表");
-    });
-    $("mgUpload").addEventListener("click", async () => {
-      hideModal();
-      await pushToCloud();
-      toast("已上传到云端");
-    });
-  } else if (cloudHas) {
-    applyCloud(cloud);
-    toast("已载入云端课表");
-  } else if (localHas) {
+  const cloudHas = !!(cloud && cloud.schedule && Array.isArray(cloud.schedule.codes) && cloud.schedule.codes.length);
+  if (!cloudHas && !localHas) return;
+  if (!cloudHas) {           // 仅本机有 → 上传
     await pushToCloud();
-    toast("已上传课表到云端");
+    return;
+  }
+  if (!localHas) {           // 仅云端有 → 下载
+    applyCloud(cloud);
+    return;
+  }
+  /* 两端都有：比较修改时间，新者胜（静默，无提示） */
+  let localT = 0, cloudT = 0;
+  try { localT = Number(localStorage.getItem(LAST_MODIFIED_KEY)) || 0; } catch (e) {}
+  try { cloudT = cloud.updated_at ? Date.parse(cloud.updated_at) : 0; } catch (e) {}
+  if (localT > cloudT) {
+    await pushToCloud();     // 本机更新（可能是离线时改的）→ 推上去
+  } else {
+    applyCloud(cloud);       // 云端更新 → 下载
   }
 }
 
@@ -389,7 +382,10 @@ function loadState() {
 }
 
 function saveState() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    localStorage.setItem(LAST_MODIFIED_KEY, String(Date.now()));
+  }
   catch (e) { toast("保存失败（存储空间不足？）"); }
   if (typeof document !== "undefined") schedulePush();
 }
