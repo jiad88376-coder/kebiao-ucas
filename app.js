@@ -816,6 +816,13 @@ function renderDrawer() {
   if (drawerTab === "exams") body.appendChild(examsView());
   d.appendChild(body);
 
+  const forumBtn = el("button", "r-btn ghost", "💬 讨论与资料区");
+  forumBtn.addEventListener("click", () => {
+    closeDrawer();
+    showForum("course", { courseCode: c.code });
+  });
+  d.appendChild(forumBtn);
+
   const delBtn = el("button", "r-btn danger", "从课表移除这门课");
   delBtn.addEventListener("click", () => { closeDrawer(); removeCourse(c.code); });
   d.appendChild(delBtn);
@@ -1113,6 +1120,318 @@ if (typeof document !== "undefined") {
   });
 }
 
+/* ---------------- 论坛 ---------------- */
+const FILE_MAX = 5 * 1024 * 1024; // 走 Netlify 代理的单文件上限
+let forumCtx = { mode: "list" };
+
+function requireLogin() {
+  if (authUser) return true;
+  toast("请先登录再使用论坛");
+  showAuthModal();
+  return false;
+}
+function authorShort(s) { return String(s || "").split("@")[0] || "同学"; }
+function mine(uid) { return !!(authUser && uid === authUser.id); }
+function fmtTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts), now = new Date();
+  const same = (a, b) => a.toDateString() === b.toDateString();
+  const yest = new Date(now); yest.setDate(yest.getDate() - 1);
+  const hm = d.toTimeString().slice(0, 5);
+  if (same(d, now)) return "今天 " + hm;
+  if (same(d, yest)) return "昨天 " + hm;
+  return (d.getMonth() + 1) + "月" + d.getDate() + "日 " + hm;
+}
+function fmtSize(n) {
+  return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+}
+function forumFileURL(p) {
+  return SUPABASE_URL + "/storage/v1/object/public/forum-files/" +
+    String(p).split("/").map(encodeURIComponent).join("/");
+}
+
+function showForum(mode, opts) {
+  opts = opts || {};
+  if (!requireLogin()) return;
+  forumCtx = Object.assign({ mode: mode || "list" }, opts);
+  $("welcome").classList.add("hidden");
+  $("main").classList.add("hidden");
+  $("forum").classList.remove("hidden");
+  window.scrollTo(0, 0);
+  renderForum();
+}
+function closeForum() {
+  $("forum").classList.add("hidden");
+  $("forumBody").innerHTML = "";
+  state.codes.length ? showMain() : showWelcome();
+}
+
+function renderForum() {
+  const head = $("forumHead");
+  head.innerHTML = "";
+  const back = el("button", "fb-back", "←");
+  back.addEventListener("click", closeForum);
+  head.appendChild(back);
+  let title = "自由论坛";
+  if (forumCtx.mode === "post") title = "帖子详情";
+  if (forumCtx.mode === "course") title = (courseMap[forumCtx.courseCode] || {}).name || forumCtx.courseCode;
+  head.appendChild(el("span", "fb-title", title));
+  if (forumCtx.mode === "list") {
+    const nb = el("button", "fb-new", "✚ 发帖");
+    nb.addEventListener("click", composeForumPost);
+    head.appendChild(nb);
+  }
+  $("forumBody").innerHTML = "";
+  if (forumCtx.mode === "list") loadForumList();
+  if (forumCtx.mode === "post") loadForumPost(forumCtx.postId);
+  if (forumCtx.mode === "course") loadCourseForum(forumCtx.courseCode);
+}
+
+/* ---- 自由论坛：列表 ---- */
+async function loadForumList() {
+  const body = $("forumBody");
+  body.appendChild(el("div", "f-loading", "加载中…"));
+  let posts;
+  try {
+    const { data, error } = await supabaseClient.from("forum_posts")
+      .select("id,user_id,author,title,content,created_at")
+      .eq("is_deleted", false).order("created_at", { ascending: false }).limit(100);
+    if (error) throw error;
+    posts = data || [];
+  } catch (e) {
+    body.innerHTML = "";
+    body.appendChild(el("div", "f-empty", "加载失败：" + (e.message || e)));
+    return;
+  }
+  body.innerHTML = "";
+  if (!posts.length) {
+    body.appendChild(el("div", "f-empty", "还没有帖子，点右上角「✚ 发帖」抢个沙发～"));
+    return;
+  }
+  for (const p of posts) {
+    const card = el("div", "f-card");
+    card.appendChild(el("div", "f-title", p.title));
+    card.appendChild(el("div", "f-preview", p.content.length > 64 ? p.content.slice(0, 64) + "…" : p.content));
+    const meta = el("div", "f-meta");
+    meta.appendChild(el("span", "", authorShort(p.author)));
+    meta.appendChild(el("span", "", fmtTime(p.created_at)));
+    if (mine(p.user_id)) meta.appendChild(delBtn("删除这条帖子？", () =>
+      supabaseClient.from("forum_posts").delete().eq("id", p.id), () => loadForumList()));
+    card.appendChild(meta);
+    card.addEventListener("click", () => showForum("post", { postId: p.id }));
+    body.appendChild(card);
+  }
+}
+
+function delBtn(tip, doDelete, refresh) {
+  const b = el("button", "f-del", "删除");
+  b.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    if (!confirm(tip)) return;
+    b.disabled = true;
+    try {
+      const { error } = await doDelete();
+      if (error) throw error;
+      toast("已删除");
+      refresh();
+    } catch (e) {
+      toast("删除失败：" + (e.message || e));
+      b.disabled = false;
+    }
+  });
+  return b;
+}
+
+/* ---- 自由论坛：帖子详情 ---- */
+async function loadForumPost(id) {
+  const body = $("forumBody");
+  body.appendChild(el("div", "f-loading", "加载中…"));
+  let post, replies;
+  try {
+    const r1 = await supabaseClient.from("forum_posts").select("*").eq("id", id).single();
+    if (r1.error) throw r1.error;
+    post = r1.data;
+    const r2 = await supabaseClient.from("forum_replies")
+      .select("*").eq("post_id", id).eq("is_deleted", false)
+      .order("created_at", { ascending: true }).limit(200);
+    if (r2.error) throw r2.error;
+    replies = r2.data || [];
+  } catch (e) {
+    body.innerHTML = "";
+    body.appendChild(el("div", "f-empty", "加载失败：" + (e.message || e)));
+    return;
+  }
+  body.innerHTML = "";
+  const main = el("div", "f-card f-main");
+  main.appendChild(el("div", "f-title", post.title));
+  main.appendChild(el("div", "f-content", post.content));
+  const meta = el("div", "f-meta");
+  meta.appendChild(el("span", "", authorShort(post.author)));
+  meta.appendChild(el("span", "", fmtTime(post.created_at)));
+  if (mine(post.user_id)) meta.appendChild(delBtn("删除这条帖子？", () =>
+    supabaseClient.from("forum_posts").delete().eq("id", post.id), closeForum));
+  main.appendChild(meta);
+  body.appendChild(main);
+
+  body.appendChild(el("div", "f-sep", replies.length ? "全部回复（" + replies.length + "）" : "还没有回复，来抢沙发～"));
+  for (const r of replies) {
+    const rc = el("div", "f-reply");
+    rc.appendChild(el("div", "f-reply-head", authorShort(r.author) + " · " + fmtTime(r.created_at)));
+    rc.appendChild(el("div", "f-reply-content", r.content));
+    if (mine(r.user_id)) rc.appendChild(delBtn("删除这条回复？", () =>
+      supabaseClient.from("forum_replies").delete().eq("id", r.id), () => loadForumPost(id)));
+    body.appendChild(rc);
+  }
+
+  const form = el("div", "f-compose");
+  const ta = el("textarea");
+  ta.placeholder = "写下你的回复…";
+  const btn = el("button", "f-send", "回复");
+  btn.addEventListener("click", async () => {
+    const t = ta.value.trim();
+    if (!t) { toast("回复不能为空"); return; }
+    if (t.length > 2000) { toast("回复过长（≤2000 字）"); return; }
+    btn.disabled = true; btn.textContent = "发送中…";
+    try {
+      const { error } = await supabaseClient.from("forum_replies").insert({
+        post_id: id, user_id: authUser.id, author: authUser.email, content: t
+      });
+      if (error) throw error;
+      toast("回复成功");
+      loadForumPost(id);
+    } catch (e) {
+      toast("发送失败：" + (e.message || e));
+      btn.disabled = false; btn.textContent = "回复";
+    }
+  });
+  form.appendChild(ta);
+  form.appendChild(btn);
+  body.appendChild(form);
+}
+
+/* ---- 自由论坛：发帖弹窗 ---- */
+function composeForumPost() {
+  showModal(`
+    <h3>发布新帖</h3>
+    <div class="r-form">
+      <input id="fpTitle" maxlength="80" placeholder="标题（1-80 字）">
+      <textarea id="fpContent" placeholder="正文（1-4000 字）" style="min-height:130px"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="ok" id="fpOk">发布</button>
+      <button class="cancel" id="fpCancel">取消</button>
+    </div>`);
+  $("fpOk").addEventListener("click", async () => {
+    const title = $("fpTitle").value.trim();
+    const content = $("fpContent").value.trim();
+    if (!title) { toast("请填写标题"); return; }
+    if (!content) { toast("请填写正文"); return; }
+    $("fpOk").disabled = true;
+    try {
+      const { error } = await supabaseClient.from("forum_posts").insert({
+        user_id: authUser.id, author: authUser.email, title, content
+      });
+      if (error) throw error;
+      hideModal();
+      toast("发布成功");
+      loadForumList();
+    } catch (e) {
+      toast("发布失败：" + (e.message || e));
+      $("fpOk").disabled = false;
+    }
+  });
+  $("fpCancel").addEventListener("click", hideModal);
+}
+
+/* ---- 课程区：讨论与资料 ---- */
+async function loadCourseForum(code) {
+  const body = $("forumBody");
+  body.appendChild(el("div", "f-loading", "加载中…"));
+  let posts;
+  try {
+    const { data, error } = await supabaseClient.from("course_posts")
+      .select("*").eq("course_code", code).eq("is_deleted", false)
+      .order("created_at", { ascending: true }).limit(200);
+    if (error) throw error;
+    posts = data || [];
+  } catch (e) {
+    body.innerHTML = "";
+    body.appendChild(el("div", "f-empty", "加载失败：" + (e.message || e)));
+    return;
+  }
+  body.innerHTML = "";
+  body.appendChild(el("div", "f-tip", "课程交流与资料共享区 · 文件 ≤ 5MB · 请勿上传侵权或违规内容，违规将被移除"));
+  if (!posts.length) body.appendChild(el("div", "f-empty", "还没有讨论或资料，来发第一条吧"));
+  for (const p of posts) {
+    const card = el("div", "f-card f-cp" + (mine(p.user_id) ? " mine" : ""));
+    card.appendChild(el("div", "f-reply-head", authorShort(p.author) + " · " + fmtTime(p.created_at)));
+    if (p.content) card.appendChild(el("div", "f-reply-content", p.content));
+    if (p.file_path) {
+      const fc = el("a", "f-file");
+      fc.href = forumFileURL(p.file_path);
+      fc.target = "_blank"; fc.rel = "noopener";
+      const nm = el("span", "f-file-name", p.file_name || "附件");
+      const sz = el("span", "f-file-size", p.file_size ? " · " + fmtSize(p.file_size) : "");
+      fc.appendChild(el("span", "", "📎"));
+      fc.appendChild(nm); fc.appendChild(sz);
+      card.appendChild(fc);
+    }
+    const meta = el("div", "f-meta");
+    if (mine(p.user_id)) meta.appendChild(delBtn("删除这条内容？", () =>
+      supabaseClient.from("course_posts").delete().eq("id", p.id), () => loadCourseForum(code)));
+    card.appendChild(meta);
+    body.appendChild(card);
+  }
+
+  const form = el("div", "f-compose");
+  const ta = el("textarea");
+  ta.placeholder = "说点什么，或分享资料…（可只发文件）";
+  const row = el("div", "f-compose-row");
+  const attach = el("button", "r-btn ghost", "📎 附件");
+  const fileIn = el("input");
+  fileIn.type = "file"; fileIn.hidden = true;
+  attach.addEventListener("click", () => fileIn.click());
+  fileIn.addEventListener("change", () => {
+    const f = fileIn.files[0];
+    attach.textContent = f ? "📎 " + (f.name.length > 10 ? f.name.slice(0, 10) + "…" : f.name) : "📎 附件";
+  });
+  const btn = el("button", "f-send", "发送");
+  btn.addEventListener("click", async () => {
+    const text = ta.value.trim();
+    const f = fileIn.files[0];
+    if (!text && !f) { toast("写点内容或选择附件"); return; }
+    if (text.length > 2000) { toast("文字过长（≤2000 字）"); return; }
+    if (f && f.size > FILE_MAX) { toast("附件不能超过 5MB"); return; }
+    btn.disabled = true; attach.disabled = true;
+    btn.textContent = f ? "上传中…" : "发送中…";
+    try {
+      let fileMeta = null;
+      if (f) {
+        const ext = (f.name.match(/\.[A-Za-z0-9]+$/) || [""])[0];
+        const path = authUser.id + "/" + code + "-" + Date.now() + ext;
+        const { error: uerr } = await supabaseClient.storage.from("forum-files").upload(path, f, { upsert: false });
+        if (uerr) throw uerr;
+        fileMeta = { file_path: path, file_name: f.name, file_size: f.size };
+      }
+      const { error } = await supabaseClient.from("course_posts").insert(Object.assign({
+        course_code: code, user_id: authUser.id, author: authUser.email, content: text
+      }, fileMeta));
+      if (error) throw error;
+      toast(f ? "资料已上传" : "已发送");
+      loadCourseForum(code);
+    } catch (e) {
+      toast("发送失败：" + (e.message || e));
+      btn.disabled = false; attach.disabled = false; btn.textContent = "发送";
+    }
+  });
+  row.appendChild(attach);
+  row.appendChild(btn);
+  form.appendChild(ta);
+  form.appendChild(row);
+  body.appendChild(form);
+  body.appendChild(fileIn);
+}
+
 /* ---------------- 初始化 ---------------- */
 function init() {
   loadState();
@@ -1130,6 +1449,7 @@ function init() {
   $("btnCodes").addEventListener("click", showCodesModal);
   $("btnShare").addEventListener("click", shareLink);
   $("btnLogin").addEventListener("click", showAuthModal);
+  $("btnForum").addEventListener("click", () => showForum("list"));
 
   /* 周次切换条 */
   $("wkPrev").addEventListener("click", () => {

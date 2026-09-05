@@ -380,7 +380,74 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
   .brand-text { font-size: 15px; }
   .term-badge { font-size: 10px; padding: 2px 6px; }
   .legend { font-size: 10px; gap: 8px; }
+
+  /* 手机端论坛 */
+  .forum-head { top: 45px; }
+  .fb-title { font-size: 15px; }
+  #forumBody textarea { font-size: 16px; }
 }
+
+/* ---------- 论坛 ---------- */
+#forum { max-width: 760px; margin: 0 auto; padding: 10px 8px 40px; }
+.forum-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  position: sticky; top: 49px; z-index: 20; background: var(--bg); padding: 4px 0;
+}
+.fb-back {
+  width: 34px; height: 34px; flex: none; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card); font-size: 17px; color: #4a5568; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.fb-back:active { background: #eef1f7; }
+.fb-title { flex: 1; min-width: 0; font-size: 16px; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fb-new {
+  flex: none; border: none; border-radius: 10px; background: var(--primary); color: #fff;
+  font-size: 13px; font-weight: 600; padding: 9px 12px; cursor: pointer;
+}
+.fb-new:active { background: var(--primary-dark); }
+.forum-body { display: flex; flex-direction: column; gap: 10px; }
+.f-loading, .f-empty { text-align: center; color: var(--muted); font-size: 13px; padding: 34px 10px; line-height: 1.8; }
+.f-tip { font-size: 11.5px; color: #8a6d00; background: #fff8e6; border: 1px solid #f3e3ae;
+  border-radius: 9px; padding: 7px 10px; line-height: 1.5; }
+.f-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 13px; cursor: pointer; transition: filter .12s; }
+.f-card:active { filter: brightness(.96); }
+.f-title { font-size: 15px; font-weight: 700; line-height: 1.4; }
+.f-preview { font-size: 13px; color: var(--muted); margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.f-main { cursor: default; }
+.f-content { font-size: 14.5px; line-height: 1.65; margin: 6px 0 8px; white-space: pre-wrap; word-break: break-word; }
+.f-meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); margin-top: 6px; }
+.f-del { border: none; background: none; color: #c97070; font-size: 11px; padding: 2px 4px; cursor: pointer; margin-left: auto; }
+.f-sep { font-size: 12px; color: var(--muted); margin: 2px 0; }
+.f-reply { background: var(--card); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; position: relative; }
+.f-reply-head { font-size: 11px; color: var(--muted); }
+.f-reply-content { font-size: 14px; line-height: 1.6; margin-top: 3px; white-space: pre-wrap; word-break: break-word; }
+.f-cp { cursor: default; }
+.f-cp.mine { border-left: 3px solid var(--primary); }
+.f-file { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding: 9px 11px;
+  background: #f0f5ff; border: 1px dashed #b9cdf7; border-radius: 9px;
+  color: #1d56c8; font-size: 13px; text-decoration: none; }
+.f-file:active { background: #e4edff; }
+.f-file-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.f-file-size { flex: none; color: #7d90c4; font-size: 11px; }
+.f-compose { position: sticky; bottom: 0; background: var(--bg); padding: 8px 0 16px;
+  display: flex; flex-direction: column; gap: 8px; }
+.f-compose textarea {
+  width: 100%; min-height: 70px; padding: 10px; border: 1px solid var(--line);
+  border-radius: 11px; font-size: 14.5px; font-family: inherit; resize: none;
+  background: var(--card); outline: none;
+}
+.f-compose textarea:focus { border-color: var(--primary); }
+.f-compose-row { display: flex; gap: 8px; }
+.f-compose-row .r-btn { flex: none; padding: 10px 14px; }
+.f-send {
+  flex: 1; border: none; border-radius: 11px; background: var(--primary); color: #fff;
+  font-size: 14.5px; font-weight: 600; padding: 11px; cursor: pointer;
+}
+.f-send:active { background: var(--primary-dark); }
+.f-send:disabled { opacity: .65; }
 
 /* ---------- Toast ---------- */
 .toast {
