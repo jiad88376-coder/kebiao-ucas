@@ -239,26 +239,74 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .modal-actions .cancel { background: #f0f2f7; }
 
 /* ---------- 登录页 ---------- */
-.auth-head { font-size: 20px; font-weight: 700; text-align: center; margin: 6px 0 4px; color: var(--text); }
-.auth-desc { font-size: 14px; color: #4a5568; text-align: center; line-height: 1.6; margin: 4px 0 18px; }
+.modal-card.auth-card {
+  padding: 26px 20px calc(22px);
+  border-radius: 18px;
+}
+.auth-logo {
+  width: 54px; height: 54px; margin: 2px auto 12px; border-radius: 15px;
+  background: linear-gradient(135deg, #3d82ff, #2456d8);
+  color: #fff; font-size: 25px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 16px rgba(47, 111, 237, .35);
+}
+.auth-head { font-size: 20px; font-weight: 700; text-align: center; margin: 0 0 6px; color: var(--text); letter-spacing: .5px; }
+.auth-desc { font-size: 13.5px; color: #5a6472; text-align: center; line-height: 1.65; margin: 0 0 20px; }
+.r-form { display: flex; flex-direction: column; gap: 11px; margin-bottom: 16px; }
 .auth-input {
-  width: 100%; padding: 13px 14px; border: 1.5px solid var(--line); border-radius: 11px;
-  font-size: 16px; outline: none; background: var(--card); -webkit-appearance: none;
+  width: 100%; padding: 13px 14px; border: 1.5px solid #dfe3ec; border-radius: 12px;
+  font-size: 16px; outline: none; background: #f8f9fc; -webkit-appearance: none;
+  transition: border-color .15s, background .15s, box-shadow .15s;
 }
-.auth-input:focus { border-color: var(--primary); }
+.auth-input::placeholder { color: #a5adbb; }
+.auth-input:focus {
+  border-color: var(--primary); background: #fff;
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, .12);
+}
+.auth-input + .auth-input { margin-top: 0; }
 .auth-main {
-  width: 100%; margin-top: 10px; padding: 14px; border: none; border-radius: 11px;
-  background: var(--primary); color: #fff; font-size: 16px; font-weight: 600; cursor: pointer;
+  width: 100%; margin-top: 4px; padding: 14px; border: none; border-radius: 12px;
+  background: linear-gradient(135deg, #3d82ff, #2F6FED);
+  color: #fff; font-size: 16px; font-weight: 600; letter-spacing: 1px; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(47, 111, 237, .28);
+  transition: transform .1s, box-shadow .15s, opacity .15s;
 }
-.auth-main:active { background: var(--primary-dark); }
-.auth-main:disabled { opacity: .7; }
-.auth-alt { display: flex; gap: 8px; margin-top: 14px; }
+.auth-main:active { transform: scale(.985); box-shadow: 0 2px 6px rgba(47, 111, 237, .25); }
+.auth-main:disabled { opacity: .65; }
+.auth-alt { display: flex; gap: 9px; margin-top: 14px; }
 .auth-alt-btn {
-  flex: 1; padding: 11px; border: 1px solid var(--line); border-radius: 10px;
-  background: var(--card); color: #4a5568; font-size: 14px; cursor: pointer;
+  flex: 1; padding: 12px; border: 1.5px solid #e2e6ee; border-radius: 12px;
+  background: var(--card); color: #3d4655; font-size: 14.5px; cursor: pointer;
+  transition: border-color .15s, background .15s;
 }
-.auth-alt-btn.auth-strong { border-color: var(--primary); color: var(--primary); font-weight: 600; }
 .auth-alt-btn:active { background: #f0f3fa; }
+.auth-alt-btn.auth-strong {
+  border-color: rgba(47, 111, 237, .55); background: #f0f5ff;
+  color: var(--primary); font-weight: 600;
+}
+.auth-input.code {
+  letter-spacing: 8px; text-align: center; font-size: 20px; font-weight: 600;
+  font-family: ui-monospace, Consolas, monospace;
+}
+.auth-input.code::placeholder { letter-spacing: 0; font-weight: 400; font-size: 15px; }
+
+/* ---------- 手机端弹窗: 底部抽屉 ---------- */
+@media (max-width: 640px) {
+  .modal { align-items: flex-end; padding: 0; }
+  .modal-card, .modal-card.auth-card {
+    max-width: 100%; border-radius: 18px 18px 0 0;
+    padding: 22px 18px calc(20px + env(safe-area-inset-bottom));
+    max-height: 88vh;
+  }
+  .auth-logo { width: 46px; height: 46px; border-radius: 13px; font-size: 21px; margin-bottom: 10px; }
+  .auth-head { font-size: 18px; }
+  .auth-desc { font-size: 13px; }
+  .auth-input { padding: 12px 13px; font-size: 16px; }
+  .auth-input.code { font-size: 18px; letter-spacing: 6px; }
+  .auth-main { padding: 13px; }
+  .auth-alt-btn { padding: 11px; font-size: 14px; }
+  .modal-actions button { padding: 13px; }
+}
 
 /* ---------- Toast ---------- */
 .toast {

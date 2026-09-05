@@ -201,11 +201,14 @@ function updateAuthUI() {
 function showAuthModal() {
   if (authUser) {
     showModal(`
-      <div class="auth-head">已登录 ✓</div>
-      <p class="auth-desc">账号：${authUser.email}<br>课表与笔记已云同步，手机/电脑登录同一账号即可互通。</p>
-      <div class="modal-actions">
-        <button class="ok" id="authSync">立即同步</button>
-        <button class="cancel" id="authOut">退出登录</button>
+      <div class="modal-card auth-card">
+        <div class="auth-logo">✓</div>
+        <div class="auth-head">已登录</div>
+        <p class="auth-desc">${authUser.email}<br>课表与笔记云同步中，换设备登录同一账号即可互通</p>
+        <div class="modal-actions">
+          <button class="ok" id="authSync">立即同步</button>
+          <button class="cancel" id="authOut">退出登录</button>
+        </div>
       </div>`);
     $("authSync").addEventListener("click", async () => {
       hideModal();
@@ -222,60 +225,72 @@ function showAuthModal() {
     return;
   }
   showModal(`
-    <div class="auth-head">☁ 登录</div>
-    <p class="auth-desc">邮箱 + 密码登录，课表/笔记/作业/考试云同步<br>没有账号？点下方「注册新账号」</p>
-    <div class="r-form">
-      <input id="authEmail" class="auth-input" type="email" placeholder="请输入邮箱，如 123@qq.com" inputmode="email">
-      <input id="authPass" class="auth-input" type="password" placeholder="密码（至少 8 位）">
-    </div>
-    <button class="auth-main" id="authLogin">登录</button>
-    <div class="auth-alt">
-      <button class="auth-alt-btn auth-strong" id="authSignup">注册新账号</button>
-      <button class="auth-alt-btn" id="authCancel">取消</button>
+    <div class="modal-card auth-card">
+      <div class="auth-logo">课</div>
+      <div class="auth-head">登录 · 云同步课表</div>
+      <p class="auth-desc">课表 / 笔记 / 作业 / 考试 全端同步<br>手机与电脑登录同一账号即可互通</p>
+      <div class="r-form">
+        <input id="authEmail" class="auth-input" type="email" placeholder="邮箱地址" inputmode="email" autocomplete="email">
+        <input id="authPass" class="auth-input" type="password" placeholder="密码（至少 8 位）" autocomplete="current-password">
+      </div>
+      <button class="auth-main" id="authLogin">登 录</button>
+      <div class="auth-alt">
+        <button class="auth-alt-btn auth-strong" id="authSignup">✚ 注册新账号</button>
+        <button class="auth-alt-btn" id="authCancel">取消</button>
+      </div>
     </div>`);
   const emailEl = $("authEmail");
   const passEl = $("authPass");
-  $("authLogin").addEventListener("click", async () => {
-    const email = emailEl.value.trim();
-    const pass = passEl.value;
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("邮箱格式不正确"); return; }
-    if (!pass) { toast("请输入密码"); return; }
-    $("authLogin").disabled = true;
-    try {
-      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
-      if (error) throw error;
-      authUser = data.user;
-      updateAuthUI();
-      hideModal();
-      toast("登录成功，正在同步…");
-      await pullAndMerge();
-    } catch (e) {
-      const msg = e.message || e;
-      toast(msg.includes("Invalid login") ? "邮箱或密码不正确" : "登录失败：" + msg);
-    }
-    $("authLogin").disabled = false;
-  });
+  $("authLogin").addEventListener("click", () => doPasswordLogin(emailEl, passEl));
   $("authSignup").addEventListener("click", () => showAuthSignupUI(emailEl.value));
   $("authCancel").addEventListener("click", hideModal);
+}
+
+async function doPasswordLogin(emailEl, passEl, btnId = "authLogin") {
+  const email = emailEl.value.trim();
+  const pass = passEl.value;
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("邮箱格式不正确"); return; }
+  if (!pass) { toast("请输入密码"); return; }
+  const btn = $(btnId);
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = "登录中…";
+  try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
+    if (error) throw error;
+    authUser = data.user;
+    updateAuthUI();
+    hideModal();
+    toast("登录成功，正在同步…");
+    await pullAndMerge();
+  } catch (e) {
+    const msg = e.message || e;
+    toast(msg.includes("Invalid login") ? "邮箱或密码不正确" : "登录失败：" + msg);
+  }
+  btn.disabled = false;
+  btn.textContent = old;
 }
 
 /* 注册流程：① 邮箱收 6 位验证码 ② 验证码 + 设密码 → 完成注册（忘记密码时同样走此流程重设） */
 function showAuthSignupUI(email) {
   showModal(`
-    <div class="auth-head">注册新账号</div>
-    <p class="auth-desc">① 输入邮箱发送验证码<br>② 填入验证码并设置密码 → 完成注册</p>
-    <div class="r-form">
-      <div class="row2">
-        <input id="suEmail" class="auth-input" type="email" placeholder="邮箱" inputmode="email" value="${email || ""}">
-        <button class="r-btn ghost" id="suSend" style="white-space:nowrap">发送验证码</button>
+    <div class="modal-card auth-card">
+      <div class="auth-logo">课</div>
+      <div class="auth-head">注册新账号</div>
+      <p class="auth-desc">发送验证码 → 填写验证码并设置密码</p>
+      <div class="r-form">
+        <div class="row2">
+          <input id="suEmail" class="auth-input" type="email" placeholder="邮箱地址" inputmode="email" autocomplete="email" value="${email || ""}">
+          <button class="r-btn ghost" id="suSend" style="white-space:nowrap">发送验证码</button>
+        </div>
+        <input id="suCode" class="auth-input code" type="text" placeholder="6 位邮箱验证码" inputmode="numeric" maxlength="6" autocomplete="one-time-code" style="display:none">
+        <input id="suPass" class="auth-input" type="password" placeholder="设置密码（至少 8 位）" autocomplete="new-password" style="display:none">
       </div>
-      <input id="suCode" class="auth-input" type="text" placeholder="6 位邮箱验证码" inputmode="numeric" style="display:none">
-      <input id="suPass" class="auth-input" type="password" placeholder="设置密码（至少 8 位）">
-    </div>
-    <button class="auth-main" id="suDone">完成注册</button>
-    <div class="auth-alt">
-      <button class="auth-alt-btn" id="suBack">返回登录</button>
-      <button class="auth-alt-btn" id="suCancel">取消</button>
+      <button class="auth-main" id="suDone">完成注册</button>
+      <div class="auth-alt">
+        <button class="auth-alt-btn" id="suBack">← 返回登录</button>
+        <button class="auth-alt-btn" id="suCancel">取消</button>
+      </div>
     </div>`);
   const emailEl = $("suEmail");
   const codeEl = $("suCode");
@@ -291,6 +306,7 @@ function showAuthSignupUI(email) {
       if (error) throw error;
       sent = true;
       codeEl.style.display = "block";
+      passEl.style.display = "block";
       codeEl.focus();
       $("suSend").textContent = "重新发送";
       toast("验证码已发送，请查收邮箱（留意垃圾箱）");
