@@ -66,6 +66,7 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
 }
 .ib-ico { font-size: 14px; line-height: 1; }
 .more-ico { font-size: 17px; font-weight: 700; letter-spacing: 1px; margin-top: -3px; }
+.talk-btn { border-color: rgba(47, 111, 237, .45); background: #f0f5ff; color: var(--primary); font-weight: 600; }
 .icon-btn:active { background: #eef1f7; }
 
 /* ---------- 欢迎页 ---------- */
@@ -621,6 +622,7 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 [data-theme="dark"] .banner.warn { background: #33290f; border-color: #6b5322; color: #ffd9a8; }
 [data-theme="dark"] .icon-btn:active { background: #242a3a; }
 [data-theme="dark"] .theme-btn { border-color: #33508f; color: #9db9f5; }
+[data-theme="dark"] .talk-btn { border-color: rgba(90, 147, 255, .5); background: #182338; }
 [data-theme="dark"] #grid thead th { background: #181c26; }
 [data-theme="dark"] #grid thead th.today { background: var(--primary); }
 [data-theme="dark"] #grid td.time-col { background: #141822; }

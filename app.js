@@ -1211,12 +1211,10 @@ function showMoreMenu() {
     <div class="modal-card">
       <h3>更多</h3>
       <div class="menu-list">
-        <button class="menu-item" id="mmForum"><span class="mi-ico">💬</span><span>自由论坛</span></button>
         <button class="menu-item" id="mmCodes"><span class="mi-ico">⌨️</span><span>粘贴课程代码</span></button>
         <button class="menu-item" id="mmBackup"><span class="mi-ico">⤓</span><span>备份与恢复</span></button>
       </div>
     </div>`);
-  $("mmForum").addEventListener("click", () => { hideModal(); showForum("list"); });
   $("mmCodes").addEventListener("click", () => { hideModal(); showCodesModal(); });
   $("mmBackup").addEventListener("click", () => { hideModal(); backupModal(); });
 }
@@ -1707,6 +1705,7 @@ function init() {
   });
   $("btnShare").addEventListener("click", shareLink);
   $("btnLogin").addEventListener("click", showAuthModal);
+  $("btnForum").addEventListener("click", () => showForum("list"));
   $("btnMore").addEventListener("click", showMoreMenu);
   $("btnTheme").addEventListener("click", cycleTheme);
   applyTheme(themePref());
