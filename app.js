@@ -559,10 +559,11 @@ function renderGrid() {
     : allCourses
       .map(c => ({ ...c, sessions: (c.sessions || []).filter(s => inWeekSet(s.weekSet, viewWeek)) }))
       .filter(c => c.sessions.length);
-  const conflicts = findConflicts(courses);
-  const conflictCodes = new Set();
-  for (const cf of conflicts) { conflictCodes.add(cf.a.code); conflictCodes.add(cf.b.code); }
 
+  /* 单日视图: 模块化 上午/下午/晚上 三卡片 */
+  if (viewDay) { renderDayView(courses); return; }
+
+  const conflicts = findConflicts(courses);
   /* 冲突时段映射: "day-p1-p2" -> true */
   const conflictSess = new Set();
   for (const cf of conflicts) for (const p of cf.pairs) {
@@ -582,13 +583,12 @@ function renderGrid() {
     }
   }
 
-  /* 计算每节课的放置：起点(row,col) + 跨节 span；同格冲突则叠加；日聚焦时只放当天 */
+  /* 计算每节课的放置：起点(row,col) + 跨节 span；同格冲突则叠加 */
   const starts = {};   // "row-col" -> [{course, session, span}]
   const covered = {};  // "row-col" -> true (被 rowspan 覆盖)
   const placed = new Set();
   for (const c of courses) {
     for (const s of c.sessions) {
-      if (viewDay && s.day !== viewDay) continue;
       if (!(s.day >= 1 && s.day <= 7 && s.p1 >= 1 && s.p2 >= s.p1 && s.p2 <= 13)) continue;
       const key = `${c.code}|${s.day}|${s.p1}|${s.p2}|${s.weeks}`;
       if (placed.has(key)) continue;
@@ -604,7 +604,6 @@ function renderGrid() {
   const hr = el("tr");
   hr.appendChild(el("th", "time-col", ""));
   for (let d = 1; d <= 7; d++) {
-    if (viewDay && d !== viewDay) continue;
     const th = el("th", showToday && d === today ? "today" : "");
     th.appendChild(el("span", "th-day", DAY_NAMES[d - 1]));
     if (weekDates) th.appendChild(el("span", "th-date", weekDates[d - 1]));
@@ -621,7 +620,6 @@ function renderGrid() {
     tc.appendChild(el("div", "tp-time", (PERIOD_TIMES[p] || "").split("-").join("–")));
     tr.appendChild(tc);
     for (let d = 1; d <= 7; d++) {
-      if (viewDay && d !== viewDay) continue;
       const sk = `${p}-${d}`;
       if (covered[sk] && !starts[sk]) continue; // 由跨节行占位
       const td = el("td", "day-cell" + (showToday && d === today ? " today-col" : ""));
@@ -640,23 +638,111 @@ function renderGrid() {
   }
 
   grid.innerHTML = "";
-  grid.classList.toggle("single", !!viewDay);
+  grid.classList.remove("single");
+  grid.classList.remove("hidden");
+  const dv = $("dayview");
+  if (dv) dv.classList.add("hidden");
   grid.appendChild(thead);
   grid.appendChild(tbody);
 
-  /* 空 周 / 日 提示 */
+  /* 空周提示 */
   const empty = $("gridEmpty");
   if (empty) {
     const weekEmpty = viewWeek != null && courses.length === 0 && allCourses.length > 0;
-    const dayEmpty = !weekEmpty && viewDay > 0 && allCourses.length > 0 &&
-      !courses.some(c => (c.sessions || []).some(s => s.day === viewDay));
-    if (weekEmpty) {
-      empty.innerHTML = "本周没有安排课程<br><span>点上方「全部周次」可查看整学期课表</span>";
-    } else if (dayEmpty) {
-      empty.innerHTML = (viewDay === dayIndexOfToday() ? "今天没有课程安排 🎉" : "该日没有课程安排") +
-        "<br><span>点上方其他星期或「全周」查看更多</span>";
+    if (weekEmpty) empty.innerHTML = "本周没有安排课程<br><span>点上方「全部周次」可查看整学期课表</span>";
+    empty.classList.toggle("hidden", !weekEmpty);
+  }
+}
+
+/* 单日模块化视图：☀️上午(1-4节) / 🌤下午(5-9节) / 🌙晚上(10-13节)，空段出彩蛋 */
+const DAY_SECTIONS = [
+  { id: "am", icon: "☀️", label: "上午", from: 1, to: 4, time: "8:30 – 12:00" },
+  { id: "pm", icon: "🌤", label: "下午", from: 5, to: 9, time: "13:30 – 17:50" },
+  { id: "eve", icon: "🌙", label: "晚上", from: 10, to: 13, time: "18:30 – 21:50" }
+];
+const DAY_EGGS = {
+  am: ["上午没课，睡到自然醒 😴", "上午的空白，是赖床的许可 🛏️", "上午没课，去吃顿不慌不忙的早餐 🥣"],
+  pm: ["下午没课，球场 / 图书馆 / 被窝三选一 🏸", "下午自由支配，来杯咖啡 ☕", "下午没课，去校园里走走 🍃"],
+  eve: ["晚上没安排，追剧还是自习？📺", "晚风正好，去操场跑两圈 🏃", "晚上没课，早点睡 🌌"]
+};
+const DAY_FREE_EGGS = ["🎉 今天全天没课！来一场说走就走的……自习", "全天无课！这是本周最好的礼物 🎁", "今天零节课，快乐完全属于自己 🍰"];
+
+function pickEgg(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function renderDayView(courses) {
+  const grid = $("grid");
+  grid.classList.add("hidden");
+  grid.innerHTML = "";
+  let host = $("dayview");
+  if (!host) {
+    host = el("div");
+    host.id = "dayview";
+    host.className = "dayview";
+    $("gridwrap").appendChild(host);
+  }
+  host.classList.remove("hidden");
+  host.innerHTML = "";
+
+  const day = viewDay;
+  const placed = new Set();
+  const sess = [];
+  for (const c of courses) {
+    for (const s of (c.sessions || [])) {
+      if (s.day !== day) continue;
+      if (!(s.p1 >= 1 && s.p2 >= s.p1 && s.p2 <= 13)) continue;
+      const key = c.code + "|" + s.p1 + "|" + s.p2 + "|" + s.weeks;
+      if (placed.has(key)) continue;
+      placed.add(key);
+      sess.push({ course: c, p1: s.p1, p2: s.p2, room: s.room });
     }
-    empty.classList.toggle("hidden", !(weekEmpty || dayEmpty));
+  }
+  sess.sort((a, b) => a.p1 - b.p1 || a.p2 - b.p2);
+
+  /* 合并相邻同课程同时段块（如 1-2 节连排） */
+  const blocks = [];
+  for (const s of sess) {
+    const last = blocks[blocks.length - 1];
+    if (last && last.course.code === s.course.code && last.room === s.room && last.p2 + 1 === s.p1) {
+      last.p2 = s.p2;
+    } else {
+      blocks.push({ course: s.course, p1: s.p1, p2: s.p2, room: s.room });
+    }
+  }
+
+  /* 全天空课: 大彩蛋 */
+  if (!blocks.length) {
+    const card = el("div", "day-sec");
+    card.appendChild(el("div", "day-free", pickEgg(DAY_FREE_EGGS)));
+    host.appendChild(card);
+    return;
+  }
+
+  for (const sec of DAY_SECTIONS) {
+    const list = blocks.filter(b => b.p1 >= sec.from && b.p1 <= sec.to);
+    const card = el("div", "day-sec");
+    const head = el("div", "day-sec-head");
+    head.appendChild(el("span", "day-sec-icon", sec.icon));
+    const tt = el("div", "day-sec-title");
+    tt.appendChild(el("span", "", sec.label));
+    tt.appendChild(el("span", "day-sec-time", sec.time));
+    head.appendChild(tt);
+    card.appendChild(head);
+    if (!list.length) {
+      card.appendChild(el("div", "day-empty", pickEgg(DAY_EGGS[sec.id])));
+    } else {
+      for (const b of list) {
+        const blk = el("div", "day-block " + attrClass(b.course.attr));
+        blk.appendChild(el("div", "cc-name", b.course.name));
+        const t1 = (PERIOD_TIMES[b.p1] || "").split("-")[0];
+        const t2 = (PERIOD_TIMES[b.p2] || "").split("-")[1];
+        blk.appendChild(el("div", "db-time", "第" + b.p1 + (b.p2 > b.p1 ? "-" + b.p2 : "") + "节 · " + t1 + " – " + t2));
+        const meta = [b.course.teacher, b.room].filter(Boolean).join(" · ");
+        if (meta) blk.appendChild(el("div", "cc-meta", meta));
+        blk.addEventListener("click", () => openDrawer(b.course.code));
+        card.appendChild(blk);
+      }
+    }
+    host.appendChild(card);
   }
 }
 

@@ -130,6 +130,31 @@ button { font-family: inherit; }
 }
 .wk-all:active { background: #eef2fa; }
 
+/* ---------- 单日模块化视图 ---------- */
+.dayview { display: flex; flex-direction: column; gap: 12px; }
+.day-sec { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+.day-sec-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  padding-bottom: 8px; border-bottom: 1px dashed var(--line);
+}
+.day-sec-icon { font-size: 18px; line-height: 1; }
+.day-sec-title { display: flex; align-items: baseline; gap: 8px; font-size: 15px; font-weight: 700; }
+.day-sec-time { font-size: 11px; color: var(--muted); font-weight: 400; }
+.day-block { border-radius: 9px; padding: 9px 11px; margin-bottom: 8px; cursor: pointer; }
+.day-block:last-child { margin-bottom: 0; }
+.day-block:active { filter: brightness(.96); }
+.day-block .db-time { font-size: 11px; color: #6d7686; margin-top: 2px; }
+.day-block .cc-name { font-size: 13.5px; }
+.day-empty {
+  padding: 13px 10px; text-align: center; font-size: 13.5px;
+  color: var(--muted); background: #f8f9fc; border-radius: 9px;
+}
+.day-free {
+  padding: 28px 14px; text-align: center; font-size: 15px; font-weight: 600;
+  color: #3d82ff; background: linear-gradient(135deg, #f0f5ff, #fdf7ee);
+  border-radius: var(--radius); line-height: 1.7;
+}
+
 /* ---------- 星期聚焦条（仅手机端） ---------- */
 .daytabs { display: none; }
 .day-chip {
@@ -364,13 +389,10 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
   .wk-label .wk-now { font-size: 9px; padding: 1px 4px; }
   .wk-all { height: 32px; padding: 0 9px; font-size: 12px; }
 
-  /* 星期聚焦条 + 单日大列 */
+  /* 星期聚焦条 + 单日模块化视图 */
   .daytabs { display: flex; gap: 6px; margin: 0 0 8px; }
   #grid { min-width: 0; }
   #grid thead th { width: 88px; }
-  #grid.single { min-width: 0; width: 100%; }
-  #grid.single thead th { width: auto; }
-  #grid.single thead th.time-col, #grid.single td.time-col { width: 64px; }
 
   /* 顶栏紧凑化 */
   .topbar { padding: 8px 10px; }
