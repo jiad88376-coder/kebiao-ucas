@@ -77,6 +77,12 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
     <div class="legend"><span><i class="bar-o"></i>打开次数</span><span><i class="bar-d"></i>独立设备</span></div>
   </section>
   <section class="panel">
+    <h2>论坛生态（累计）</h2>
+    <div class="cap" id="forumBox">
+      <div class="c"><b>…</b><span>加载中</span></div>
+    </div>
+  </section>
+  <section class="panel">
     <h2>线路状态（实时探测）</h2>
     <div class="cap">
       <div class="c" id="srcNetlify"><b>Netlify 反代（唯一在线源）</b><span>探测中…</span></div>
@@ -103,6 +109,7 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
 var API_KEY = "sb_publishable_ONe5Ft1rxeRt-rcdruXYoQ_sM0jgwLn";
 var API = "https://kebiao-ucas.netlify.app/.netlify/functions/supabase/rest/v1/site_stats?select=day,opens,devices&order=day.desc&limit=90";
 var RPC_SUM = "https://kebiao-ucas.netlify.app/.netlify/functions/supabase/rest/v1/rpc/stats_summary";
+var RPC_FORUM = "https://kebiao-ucas.netlify.app/.netlify/functions/supabase/rest/v1/rpc/stats_forum";
 /* 免费额度常量 */
 var CAP = { funcDay: 4166, funcMonth: 125000, pagesMonthMB: 102400 };
 
@@ -200,11 +207,35 @@ function load() {
         })
         .catch(function () { render(rows, null); });
       probeSources();
+      loadForum();
     })
     .catch(function (e) {
       document.getElementById("live").textContent = "🔴 无法连接数据源";
       document.getElementById("live").className = "live old";
       document.getElementById("errbox").innerHTML = '<div class="err">数据加载失败：' + (e.message || e) + '</div>';
+    });
+}
+
+/* 论坛生态计数：security definer RPC（未建该函数时显示提示） */
+function loadForum() {
+  var box = document.getElementById("forumBox");
+  fetch(RPC_FORUM, { headers: { apikey: API_KEY } })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (s) {
+      var v = s && s[0] ? s[0] : null;
+      if (!v) {
+        box.innerHTML = '<div class="c"><b>—</b><span>统计函数未就绪（需在 Supabase 创建 stats_forum）</span></div>';
+        return;
+      }
+      var total = (v.posts || 0) + (v.replies || 0) + (v.course_posts || 0);
+      box.innerHTML =
+        '<div class="c"><b>' + v.posts + '</b><span>论坛帖子（累计）</span></div>' +
+        '<div class="c"><b>' + v.replies + '</b><span>回复（累计）</span></div>' +
+        '<div class="c"><b>' + v.course_posts + '</b><span>课程区资源（累计）</span></div>' +
+        '<div class="c"><b>' + total + '</b><span>社区内容总量</span></div>';
+    })
+    .catch(function () {
+      box.innerHTML = '<div class="c"><b>—</b><span>读取失败</span></div>';
     });
 }
 
