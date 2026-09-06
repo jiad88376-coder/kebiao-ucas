@@ -61,8 +61,13 @@ const conflictCodes = ["180081070200P1003H","180084083000PB001H"]; // 现代物�
 ok(app.findConflicts(conflictCodes.map(c => map[c])).length === 1, "构造冲突对能检出");
 
 console.log("== daysLeft ==");
-const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+/* 本地日期（toISOString 是 UTC，北京 0-8 点会差一天） */
+function localDate(offsetDays) {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+const tomorrow = localDate(1);
+const yesterday = localDate(-1);
 ok(app.daysLeft(tomorrow) === 1, "明天=1天");
 ok(app.daysLeft(yesterday) === -1, "昨天=-1天");
 
