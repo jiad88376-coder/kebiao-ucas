@@ -208,6 +208,49 @@ async function pullAndMerge() {
   }
 }
 
+/* ---------------- 主题（跟随系统 + 手动三档） ---------------- */
+const THEME_KEY = "kebiao:theme";
+
+function themePref() {
+  try { return localStorage.getItem(THEME_KEY) || "auto"; } catch (e) { return "auto"; }
+}
+function systemDark() {
+  return typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches;
+}
+function resolvedTheme(pref) {
+  if (pref === "dark" || pref === "light") return pref;
+  return systemDark() ? "dark" : "light";
+}
+function applyThemeMeta(resolved) {
+  let m = document.querySelector('meta[name="theme-color"][data-js]');
+  if (resolved === "dark") {
+    if (!m) { m = document.createElement("meta"); m.name = "theme-color"; m.setAttribute("data-js", "1"); document.head.appendChild(m); }
+    m.content = "#12151c";
+  } else if (resolved === "light") {
+    if (!m) { m = document.createElement("meta"); m.name = "theme-color"; m.setAttribute("data-js", "1"); document.head.appendChild(m); }
+    m.content = "#2F6FED";
+  } else if (m) m.remove(); /* auto: 交给带 media 属性的静态 meta */
+}
+function applyTheme(pref) {
+  const resolved = resolvedTheme(pref);
+  document.documentElement.dataset.theme = resolved;
+  applyThemeMeta(pref === "auto" ? null : resolved);
+  const btn = $("btnTheme");
+  if (btn) btn.textContent = pref === "dark" ? "🌙" : pref === "light" ? "☀️" : "🌗";
+}
+function cycleTheme() {
+  const order = ["auto", "dark", "light"];
+  const next = order[(order.indexOf(themePref()) + 1) % 3];
+  try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+  applyTheme(next);
+  toast(next === "auto" ? "深色模式：跟随系统" : next === "dark" ? "已强制深色模式" : "已强制浅色模式");
+}
+if (typeof document !== "undefined" && typeof matchMedia === "function") {
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (themePref() === "auto") applyTheme("auto");
+  });
+}
+
 function updateAuthUI() {
   $("btnLogin").textContent = authUser ? "☁ " + (authUser.email || "已登录").split("@")[0] : "☁ 登录";
 }
@@ -1557,6 +1600,8 @@ function init() {
   $("btnShare").addEventListener("click", shareLink);
   $("btnLogin").addEventListener("click", showAuthModal);
   $("btnForum").addEventListener("click", () => showForum("list"));
+  $("btnTheme").addEventListener("click", cycleTheme);
+  applyTheme(themePref());
 
   /* 周次切换条 */
   $("wkPrev").addEventListener("click", () => {

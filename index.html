@@ -12,6 +12,13 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
 <title>课表 · 国科大课程表</title>
+<script>
+try {
+  var _t = localStorage.getItem("kebiao:theme");
+  var _d = _t === "dark" || (_t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.theme = _d ? "dark" : "light";
+} catch (e) {}
+</script>
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
@@ -27,6 +34,7 @@
     <button id="btnCodes" class="icon-btn" title="粘贴课程代码">⌨ 代码</button>
     <button id="btnShare" class="icon-btn" title="分享课表">↗ 分享</button>
     <button id="btnBackup" class="icon-btn" title="备份/恢复">⤓ 备份</button>
+    <button id="btnTheme" class="icon-btn theme-btn" title="切换深浅色">🌗</button>
   </div>
 </header>
 
