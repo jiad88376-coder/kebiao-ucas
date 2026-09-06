@@ -39,6 +39,14 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
 .kpi .t { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .kpi.hl { border-color: rgba(47, 111, 237, .35); }
 .kpi.hl .n { color: var(--primary); }
+.meter { margin-bottom: 13px; }
+.meter:last-child { margin-bottom: 0; }
+.meter .mt { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 5px; }
+.meter .mt b { font-weight: 700; }
+.meter .track { height: 9px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.meter .track i { display: block; height: 100%; border-radius: 99px; background: var(--ok); transition: width .5s ease; min-width: 1.5%; }
+.meter .track i.warn { background: var(--warn); }
+.meter .track i.bad { background: #d23b3b; }
 .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 14px; box-shadow: var(--shadow); }
 .panel h2 { margin: 0 0 12px; font-size: 14.5px; }
 .panel svg { width: 100%; height: auto; display: block; }
@@ -69,6 +77,11 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
     <div class="legend"><span><i class="bar-o"></i>打开次数</span><span><i class="bar-d"></i>独立设备</span></div>
   </section>
   <section class="panel">
+    <h2>承载水位（估算 · 免费额度）</h2>
+    <div id="meters"></div>
+    <p class="note">估算口径：每次打开 ≈ 2 次函数调用、≈ 1.5MB 静态流量（首访大、回访小，取中值）。Supabase 数据库/存储目前仅几百 KB，≈0%，暂不画条。</p>
+  </section>
+  <section class="panel">
     <h2>容量参照（免费额度）</h2>
     <div class="cap">
       <div class="c"><b>GitHub Pages</b><span>带宽约 100GB/月 · 静态资源，数千日活无压力</span></div>
@@ -82,12 +95,29 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
 <script>
 var API_KEY = "sb_publishable_ONe5Ft1rxeRt-rcdruXYoQ_sM0jgwLn";
 var API = "https://kebiao-ucas.netlify.app/.netlify/functions/supabase/rest/v1/site_stats?select=day,opens,devices&order=day.desc&limit=90";
+var RPC_SUM = "https://kebiao-ucas.netlify.app/.netlify/functions/supabase/rest/v1/rpc/stats_summary";
+/* 免费额度常量 */
+var CAP = { funcDay: 4166, funcMonth: 125000, pagesMonthMB: 102400 };
+
+function meter(label, used, cap, unit) {
+  var pct = Math.min(100, used / cap * 100);
+  var lv = pct < 50 ? "" : pct < 80 ? " warn" : " bad";
+  var shown = pct < 0.1 ? "<0.1" : pct.toFixed(1);
+  return '<div class="meter"><div class="mt"><span>' + label + '</span><b>' + shown + '%<small> · 约' +
+    fmtNum(used) + unit + ' / ' + fmtNum(cap) + unit + '</small></b></div>' +
+    '<div class="track"><i class="' + lv.trim() + '" style="width:' + Math.max(pct, 1.5) + '%"></i></div></div>';
+}
+function fmtNum(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "k";
+  return Math.round(n);
+}
 
 function beijingToday() {
   return new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 }
 
-function render(rows) {
+function render(rows, usersN) {
   var box = document.getElementById("errbox");
   box.innerHTML = "";
   if (!Array.isArray(rows) || !rows.length) {
@@ -102,9 +132,14 @@ function render(rows) {
   var sum30 = 0;
   for (var j = 0; j < Math.min(rows.length, 30); j++) sum30 += rows[j].opens;
   document.getElementById("cards").innerHTML =
-    card(today.opens, "今日打开", true) + card(today.devices, "今日设备") +
+    card(today.opens, "今日打开", true) + card(today.devices, "今日日活") +
+    card(usersN == null ? "—" : usersN, "已注册用户") +
     card(yest.opens, "昨日打开") + card((sum7 / wk.length).toFixed(1), "7日日均打开") +
     card(sum30, "30天累计打开");
+  document.getElementById("meters").innerHTML =
+    meter("Netlify 函数 · 今日", today.opens * 2, CAP.funcDay, "次") +
+    meter("Netlify 函数 · 本月", sum30 * 2, CAP.funcMonth, "次") +
+    meter("GitHub Pages 带宽 · 本月", sum30 * 1.5, CAP.pagesMonthMB, "MB");
   drawChart(rows.slice(0, 30).reverse());
   var live = document.getElementById("live");
   if (today.day === beijingToday()) {
@@ -148,7 +183,16 @@ function drawChart(days) {
 function load() {
   fetch(API, { headers: { apikey: API_KEY } })
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(render)
+    .then(function (rows) {
+      /* 已注册用户数：security definer RPC（未建该函数时显示 —） */
+      fetch(RPC_SUM, { headers: { apikey: API_KEY } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (s) {
+          var n = s && s[0] && s[0].users != null ? s[0].users : null;
+          render(rows, n);
+        })
+        .catch(function () { render(rows, null); });
+    })
     .catch(function (e) {
       document.getElementById("live").textContent = "🔴 无法连接数据源";
       document.getElementById("live").className = "live old";
