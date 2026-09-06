@@ -511,6 +511,17 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
   padding: 12px 13px; cursor: pointer; transition: filter .15s, border-color .15s, box-shadow .15s; }
 .f-card:active { filter: brightness(.96); }
 .f-title { font-size: 15px; font-weight: 700; line-height: 1.4; }
+.f-tag { display: inline-flex; align-items: center; max-width: 9em; vertical-align: middle;
+  margin-left: 6px; padding: 1.5px 8px; border-radius: 99px; font-size: 11px; font-weight: 500;
+  color: var(--primary); background: rgba(47, 111, 237, .09); border: 1px solid rgba(47, 111, 237, .28);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.f-tag:active { background: rgba(47, 111, 237, .18); }
+.f-tag-file { color: #7a5d00; background: rgba(217, 160, 26, .12); border-color: rgba(217, 160, 26, .4); cursor: default; }
+.f-linkbtn { border: none; background: none; padding: 0; font-size: inherit; color: var(--primary);
+  text-decoration: underline; cursor: pointer; }
+.f-main .f-tag { margin: 2px 0 8px; }
+[data-theme="dark"] .f-tag { background: rgba(97, 141, 255, .13); border-color: rgba(97, 141, 255, .38); color: #9db9f5; }
+[data-theme="dark"] .f-tag-file { color: #e0c06a; background: rgba(224, 192, 106, .1); border-color: rgba(224, 192, 106, .35); }
 .f-preview { font-size: 13px; color: var(--muted); margin-top: 4px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .f-main { cursor: default; }
