@@ -2092,17 +2092,6 @@ function init() {
   render();
 }
 
-if (typeof document !== "undefined") {
-  initSupabase();
-  const sessionReady = supabaseClient
-    ? supabaseClient.auth.getSession().then(({ data }) => {
-        if (data.session) { authUser = data.session.user; updateAuthUI(); }
-      }).catch(() => {})
-    : Promise.resolve();
-  showWxGuide();
-  boot(sessionReady);
-}
-
 /* ---------------- 微信内置浏览器引导（无法安装 PWA） ---------------- */
 const IS_WECHAT = (typeof navigator !== "undefined") && /MicroMessenger/i.test(navigator.userAgent);
 function showWxGuide() {
@@ -2118,6 +2107,17 @@ function showWxGuide() {
   g.appendChild(x);
   const tb = document.querySelector(".topbar");
   if (tb) tb.insertAdjacentElement("afterend", g);
+}
+
+if (typeof document !== "undefined") {
+  initSupabase();
+  const sessionReady = supabaseClient
+    ? supabaseClient.auth.getSession().then(({ data }) => {
+        if (data.session) { authUser = data.session.user; updateAuthUI(); }
+      }).catch(() => {})
+    : Promise.resolve();
+  try { showWxGuide(); } catch (e) {} /* 纯装饰功能，绝不阻塞启动 */
+  boot(sessionReady);
 }
 
 /* ---------------- 学校选择与启动 ---------------- */
