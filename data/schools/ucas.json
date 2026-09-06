@@ -17,8 +17,8 @@
     { "code": "Z", "name": "中关村" }
   ],
   "sections": [
-    { "icon": "☀️", "label": "上午", "from": 1, "to": 4, "time": "8:30 – 12:00" },
-    { "icon": "🌤", "label": "下午", "from": 5, "to": 9, "time": "13:30 – 17:50" },
-    { "icon": "🌙", "label": "晚上", "from": 10, "to": 13, "time": "18:30 – 21:50" }
+    { "id": "am", "icon": "☀️", "label": "上午", "from": 1, "to": 4, "time": "8:30 – 12:00" },
+    { "id": "pm", "icon": "🌤", "label": "下午", "from": 5, "to": 9, "time": "13:30 – 17:50" },
+    { "id": "eve", "icon": "🌙", "label": "晚上", "from": 10, "to": 13, "time": "18:30 – 21:50" }
   ]
 }

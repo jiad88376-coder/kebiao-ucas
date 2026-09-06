@@ -735,12 +735,13 @@ function renderDayView(courses) {
   host.innerHTML = "";
 
   const day = viewDay;
+  const maxP = Math.max.apply(null, Object.keys(PERIOD_TIMES).map(Number));
   const placed = new Set();
   const sess = [];
   for (const c of courses) {
     for (const s of (c.sessions || [])) {
       if (s.day !== day) continue;
-      if (!(s.p1 >= 1 && s.p2 >= s.p1 && s.p2 <= 13)) continue;
+      if (!(s.p1 >= 1 && s.p2 >= s.p1 && s.p2 <= maxP)) continue;
       const key = c.code + "|" + s.p1 + "|" + s.p2 + "|" + s.weeks;
       if (placed.has(key)) continue;
       placed.add(key);
@@ -779,7 +780,8 @@ function renderDayView(courses) {
     head.appendChild(tt);
     card.appendChild(head);
     if (!list.length) {
-      card.appendChild(el("div", "day-empty", pickEgg(DAY_EGGS[sec.id])));
+      const eggs = DAY_EGGS[sec.id] || ["这段时间没课，自由安排 🌈", "空档期，适合发呆或冲刺 ✨"];
+      card.appendChild(el("div", "day-empty", pickEgg(eggs)));
     } else {
       for (const b of list) {
         const blk = el("div", "day-block " + attrClass(b.course.attr));
