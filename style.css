@@ -555,10 +555,10 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .school-none { padding: 18px; color: var(--muted); font-size: 13px; }
 
 /* ---------- 更多菜单 / 分享 ---------- */
-.menu-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.menu-list { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
 .menu-item {
-  display: flex; align-items: center; gap: 12px; padding: 13px 14px;
-  border: 1px solid var(--line); border-radius: 12px; background: var(--card);
+  display: flex; align-items: center; gap: 12px; padding: 13px 12px;
+  border: none; border-radius: 10px; background: transparent;
   font-size: 15px; color: var(--text); cursor: pointer; text-align: left; width: 100%;
 }
 .menu-item:active { background: #f0f3fa; }
@@ -656,7 +656,6 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 [data-theme="dark"] .f-loginbar { background: #182338; border-color: #33447a; color: #a8c0f5; }
 [data-theme="dark"] .f-del { color: #e08c8c; }
 [data-theme="dark"] .fb-back:active { background: #242a3a; }
-[data-theme="dark"] .menu-item { border-color: #2f3646; }
 [data-theme="dark"] .menu-item:active { background: #242a3a; }
 [data-theme="dark"] .share-text { background: #181c26; }
 [data-theme="dark"] .drawer-grip { background: #3a4152; }

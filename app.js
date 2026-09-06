@@ -1188,11 +1188,13 @@ function uid() {
 /* ---------------- 代码输入弹窗 ---------------- */
 function showCodesModal() {
   showModal(`
-    <h3>粘贴课程代码</h3>
-    <textarea id="codesText" spellcheck="false" placeholder="每行一个课程代码，如：&#10;180081070200P1001H-1"></textarea>
-    <div class="modal-actions">
-      <button class="ok" id="codesOk">添加到课表</button>
-      <button class="cancel" id="codesCancel">取消</button>
+    <div class="modal-card">
+      <h3>粘贴课程代码</h3>
+      <textarea id="codesText" spellcheck="false" placeholder="每行一个课程代码，如：&#10;180081070200P1001H-1"></textarea>
+      <div class="modal-actions">
+        <button class="ok" id="codesOk">添加到课表</button>
+        <button class="cancel" id="codesCancel">取消</button>
+      </div>
     </div>`);
   $("codesOk").addEventListener("click", () => {
     const raw = parseCodes($("codesText").value);
@@ -1206,11 +1208,13 @@ function showCodesModal() {
 /* ---------------- 更多菜单（论坛/代码/备份收纳于此） ---------------- */
 function showMoreMenu() {
   showModal(`
-    <h3>更多</h3>
-    <div class="menu-list">
-      <button class="menu-item" id="mmForum"><span class="mi-ico">💬</span><span>自由论坛</span></button>
-      <button class="menu-item" id="mmCodes"><span class="mi-ico">⌨️</span><span>粘贴课程代码</span></button>
-      <button class="menu-item" id="mmBackup"><span class="mi-ico">⤓</span><span>备份与恢复</span></button>
+    <div class="modal-card">
+      <h3>更多</h3>
+      <div class="menu-list">
+        <button class="menu-item" id="mmForum"><span class="mi-ico">💬</span><span>自由论坛</span></button>
+        <button class="menu-item" id="mmCodes"><span class="mi-ico">⌨️</span><span>粘贴课程代码</span></button>
+        <button class="menu-item" id="mmBackup"><span class="mi-ico">⤓</span><span>备份与恢复</span></button>
+      </div>
     </div>`);
   $("mmForum").addEventListener("click", () => { hideModal(); showForum("list"); });
   $("mmCodes").addEventListener("click", () => { hideModal(); showCodesModal(); });
@@ -1219,11 +1223,13 @@ function showMoreMenu() {
 
 function backupModal() {
   showModal(`
-    <h3>备份与恢复</h3>
-    <p style="color:var(--muted);font-size:13px">课表与笔记仅保存在本机浏览器。换手机或清缓存前请先导出备份。</p>
-    <div class="modal-actions">
-      <button class="ok" id="bkpExport">导出备份</button>
-      <button class="cancel" id="bkpImport">导入备份</button>
+    <div class="modal-card">
+      <h3>备份与恢复</h3>
+      <p style="color:var(--muted);font-size:13px">课表与笔记仅保存在本机浏览器。换手机或清缓存前请先导出备份。</p>
+      <div class="modal-actions">
+        <button class="ok" id="bkpExport">导出备份</button>
+        <button class="cancel" id="bkpImport">导入备份</button>
+      </div>
     </div>`);
   $("bkpExport").addEventListener("click", () => { hideModal(); exportBackup(); });
   $("bkpImport").addEventListener("click", () => { hideModal(); $("fileImport").click(); });
@@ -1254,13 +1260,15 @@ function shareLink() {
   }
   const full = SHARE_TEXT + "\n👉 " + SHARE_URL;
   showModal(`
-    <h3>推荐「课表」给同学</h3>
-    <p class="share-hint">复制文案发给同学 / 群里，一起用更方便</p>
-    <div class="share-text">${SHARE_TEXT}
+    <div class="modal-card">
+      <h3>推荐「课表」给同学</h3>
+      <p class="share-hint">复制文案发给同学 / 群里，一起用更方便</p>
+      <div class="share-text">${SHARE_TEXT}
 👉 ${SHARE_URL}</div>
-    <div class="modal-actions">
-      <button class="ok" id="shCopyAll">复制文案</button>
-      <button class="cancel" id="shCopyUrl">只复制链接</button>
+      <div class="modal-actions">
+        <button class="ok" id="shCopyAll">复制文案</button>
+        <button class="cancel" id="shCopyUrl">只复制链接</button>
+      </div>
     </div>`);
   $("shCopyAll").addEventListener("click", () => copyShare(full, "文案已复制，发给同学吧"));
   $("shCopyUrl").addEventListener("click", () => copyShare(SHARE_URL, "链接已复制"));
@@ -1291,11 +1299,13 @@ function importBackup(file) {
       const data = JSON.parse(reader.result);
       if (!Array.isArray(data.codes)) throw new Error("bad format");
       showModal(`
-        <h3>导入备份</h3>
-        <p>将覆盖当前课表与笔记（当前 ${state.codes.length} 门课）。继续？</p>
-        <div class="modal-actions">
-          <button class="ok" id="impOk">覆盖导入</button>
-          <button class="cancel" id="impCancel">取消</button>
+        <div class="modal-card">
+          <h3>导入备份</h3>
+          <p>将覆盖当前课表与笔记（当前 ${state.codes.length} 门课）。继续？</p>
+          <div class="modal-actions">
+            <button class="ok" id="impOk">覆盖导入</button>
+            <button class="cancel" id="impCancel">取消</button>
+          </div>
         </div>`);
       $("impOk").addEventListener("click", () => {
         state.codes = data.codes.filter(c => courseMap[c]);
@@ -1316,6 +1326,10 @@ if (typeof document !== "undefined") {
   $("fileImport").addEventListener("change", (e) => {
     if (e.target.files[0]) importBackup(e.target.files[0]);
     e.target.value = "";
+  });
+  /* 点遮罩关闭弹窗（所有弹窗通用兜底，防止被困住） */
+  $("modal").addEventListener("click", (e) => {
+    if (e.target === $("modal")) hideModal();
   });
 }
 
@@ -1526,14 +1540,16 @@ async function loadForumPost(id) {
 /* ---- 自由论坛：发帖弹窗 ---- */
 function composeForumPost() {
   showModal(`
-    <h3>发布新帖</h3>
-    <div class="r-form">
-      <input id="fpTitle" maxlength="80" placeholder="标题（1-80 字）">
-      <textarea id="fpContent" placeholder="正文（1-4000 字）" style="min-height:130px"></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="ok" id="fpOk">发布</button>
-      <button class="cancel" id="fpCancel">取消</button>
+    <div class="modal-card">
+      <h3>发布新帖</h3>
+      <div class="r-form">
+        <input id="fpTitle" maxlength="80" placeholder="标题（1-80 字）">
+        <textarea id="fpContent" placeholder="正文（1-4000 字）" style="min-height:130px"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="ok" id="fpOk">发布</button>
+        <button class="cancel" id="fpCancel">取消</button>
+      </div>
     </div>`);
   $("fpOk").addEventListener("click", async () => {
     const title = $("fpTitle").value.trim();
@@ -1720,11 +1736,13 @@ function init() {
   const shared = parseCodes(params.get("c"));
   if (shared.length) {
     showModal(`
-      <h3>来自分享的课程代码</h3>
-      <p>识别到 ${shared.length} 个课程代码，导入到你的课表？</p>
-      <div class="modal-actions">
-        <button class="ok" id="shOk">导入</button>
-        <button class="cancel" id="shCancel">取消</button>
+      <div class="modal-card">
+        <h3>来自分享的课程代码</h3>
+        <p>识别到 ${shared.length} 个课程代码，导入到你的课表？</p>
+        <div class="modal-actions">
+          <button class="ok" id="shOk">导入</button>
+          <button class="cancel" id="shCancel">取消</button>
+        </div>
       </div>`);
     $("shOk").addEventListener("click", () => { hideModal(); addCodes(shared); });
     $("shCancel").addEventListener("click", hideModal);
