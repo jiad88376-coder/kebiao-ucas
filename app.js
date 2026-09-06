@@ -150,64 +150,89 @@ let supabaseClient = null;
 let authUser = null;
 let pushTimer = null;
 let proxyIdx = 0;
+let failovers = 0;
+
+/* 统一的 auth 存储键：让所有反代源共享登录态（supabase-js 默认按域名派生，双源会割裂） */
+const AUTH_SK = "kebiao-auth-token-v1";
+/* 一次性迁移：把旧版按域名派生的 key 搬到统一 key，避免老用户被登出 */
+function migrateAuthKey() {
+  try {
+    if (localStorage.getItem(AUTH_SK)) return;
+    const keys = Object.keys(localStorage).filter(k => /auth-token/.test(k) && k !== AUTH_SK);
+    if (keys.length === 1) {
+      const v = localStorage.getItem(keys[0]);
+      if (v) localStorage.setItem(AUTH_SK, v);
+    }
+  } catch (e) {}
+}
 
 function setProxy(i) {
   proxyIdx = i;
   const s = PROXY_SOURCES[i];
   supabaseClient = (typeof window !== "undefined" && window.supabase)
-    ? window.supabase.createClient(s.base + s.path, SUPABASE_KEY)
+    ? window.supabase.createClient(s.base + s.path, SUPABASE_KEY, { auth: { storageKey: AUTH_SK } })
     : null;
 }
 
 function initSupabase() {
+  migrateAuthKey();
   setProxy(0);
 }
 
-async function probeProxies() {
-  const probe = async (s) => {
-    const t0 = Date.now();
-    try {
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), 4000);
-      const r = await fetch(s.base + s.path + "/rest/v1/site_stats?select=day&limit=1", {
-        headers: { apikey: SUPABASE_KEY },
-        signal: ctl.signal
-      });
-      clearTimeout(timer);
-      return r.ok ? Date.now() - t0 : 99999;
-    } catch (e) { return 99999; }
-  };
-  const lat = await Promise.all(PROXY_SOURCES.map(probe));
-  let best = 0;
-  for (let i = 0; i < lat.length; i++) if (lat[i] < lat[best]) best = i;
-  if (lat[best] === 99999) return; /* 两源全挂: 保持现状，等运行时报错提示 */
-  if (lat[proxyIdx] === 99999 || lat[best] * 2 < lat[proxyIdx]) setProxy(best);
+/* 网络 类错误识别（GFW reset / 断网 / 反代挂） */
+function looksNetworky(e) {
+  const m = String((e && (e.message || e)) || "");
+  return /failed to fetch|networkerror|network error|load failed|timed?\s?out|abort|502|503/i.test(m);
 }
 
-/* 本地修改后 800ms 内合并推送云端（登录状态下） */
+/* 惰性故障切换：调用失败才切源重试一次，不做主动探测（省额度） */
+async function withFailover(fn) {
+  try {
+    return await fn(supabaseClient);
+  } catch (e) {
+    if (!looksNetworky(e) || failovers >= 2 || PROXY_SOURCES.length < 2) throw e;
+    failovers++;
+    setProxy((proxyIdx + 1) % PROXY_SOURCES.length);
+    return await fn(supabaseClient);
+  }
+}
+
+function online() {
+  return typeof navigator === "undefined" || navigator.onLine !== false;
+}
+
+/* 本地修改后 800ms 内合并推送云端（登录状态下）；内容没变就不推 */
 function schedulePush() {
-  if (!supabaseClient || !authUser) return;
+  if (!supabaseClient || !authUser || !online()) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(pushToCloud, 800);
 }
 
+function stateHash() {
+  return state.codes.join(",") + "|" + JSON.stringify(state.records);
+}
+let lastPushedHash = null;
+
 async function pushToCloud() {
-  if (!supabaseClient || !authUser) return;
+  if (!supabaseClient || !authUser || !online()) return;
+  const h = stateHash();
+  if (h === lastPushedHash) return; /* 无变化不推 */
   try {
-    await supabaseClient.from("user_data").upsert({
+    await withFailover((c) => c.from("user_data").upsert({
       user_id: authUser.id,
       schedule: { codes: state.codes },
       records: state.records,
       updated_at: new Date().toISOString()
-    }, { onConflict: "user_id" });
+    }, { onConflict: "user_id" }));
+    lastPushedHash = h;
   } catch (e) { console.warn("push failed", e); }
 }
 
 async function pullFromCloud() {
-  if (!supabaseClient || !authUser) return null;
+  if (!supabaseClient || !authUser || !online()) return null;
   try {
-    const { data } = await supabaseClient.from("user_data")
-      .select("schedule,records,updated_at").eq("user_id", authUser.id).maybeSingle();
+    const { data } = await withFailover((c) => c.from("user_data")
+      .select("schedule,records,updated_at").eq("user_id", authUser.id).maybeSingle());
     return data || null;
   } catch (e) { console.warn("pull failed", e); return null; }
 }
@@ -217,13 +242,14 @@ function applyCloud(cloud) {
   state.codes = codes.filter(c => courseMap[c]);
   state.records = cloud && cloud.records && typeof cloud.records === "object" ? cloud.records : {};
   saveState();
+  lastPushedHash = stateHash(); /* 刚下载的内容标记为已推送，防止回声推送 */
   render();
 }
 
 /* 登录后的数据合并：两端都有数据时按修改时间静默取舍（新的一方胜出），不再弹窗 */
-/* 节流：10 分钟内重复打开不重复拉取（省函数调用额度）；force=true 跳过节流（登录/手动同步） */
+/* 节流：15 分钟内重复打开不重复拉取（省函数调用额度）；force=true 跳过节流（登录/手动同步） */
 const SYNC_AT_KEY = "kebiao:syncat";
-const SYNC_MIN_MS = 10 * 60 * 1000;
+const SYNC_MIN_MS = 15 * 60 * 1000;
 let lastSyncAt = 0;
 try { lastSyncAt = Number(localStorage.getItem(SYNC_AT_KEY)) || 0; } catch (e) {}
 function markSynced() {
@@ -1679,6 +1705,7 @@ function forumCacheSave(posts) {
 }
 function forumCacheClear() {
   forumListCache = null;
+  forumDetailMem.clear();
   try { localStorage.removeItem(FORUM_CACHE_KEY); } catch (e) {}
 }
 
@@ -1759,26 +1786,43 @@ function loginBar(text) {
   return wrap;
 }
 
-/* ---- 自由论坛：帖子详情 ---- */
+/* ---- 自由论坛：帖子详情（5 分钟内存缓存，进出详情页零请求） ---- */
+const FORUM_DETAIL_MS = 5 * 60 * 1000;
+const forumDetailMem = new Map();
+
 async function loadForumPost(id) {
   const body = $("forumBody");
   if (!supabaseClient) { body.innerHTML = ""; body.appendChild(el("div", "f-empty", "云服务未就绪，请刷新页面后重试")); return; }
+  const ck = "p:" + id;
+  const hit = forumDetailMem.get(ck);
+  if (hit && Date.now() - hit.ts < FORUM_DETAIL_MS) {
+    renderForumPost(id, hit.post, hit.replies);
+    return;
+  }
   body.appendChild(el("div", "f-loading", "加载中…"));
   let post, replies;
   try {
-    const r1 = await supabaseClient.from("forum_posts").select("*").eq("id", id).single();
+    const r1 = await withFailover((c) => c.from("forum_posts").select("*").eq("id", id).single());
     if (r1.error) throw r1.error;
     post = r1.data;
-    const r2 = await supabaseClient.from("forum_replies")
+    const r2 = await withFailover((c) => c.from("forum_replies")
       .select("*").eq("post_id", id).eq("is_deleted", false)
-      .order("created_at", { ascending: true }).limit(200);
+      .order("created_at", { ascending: true }).limit(200));
     if (r2.error) throw r2.error;
     replies = r2.data || [];
   } catch (e) {
+    if (!body.isConnected) return;
     body.innerHTML = "";
     body.appendChild(el("div", "f-empty", "加载失败：" + (e.message || e)));
     return;
   }
+  forumDetailMem.set(ck, { ts: Date.now(), post, replies });
+  renderForumPost(id, post, replies);
+}
+
+function renderForumPost(id, post, replies) {
+  const body = $("forumBody");
+  if (!body || !body.isConnected) return;
   body.innerHTML = "";
   const main = el("div", "f-card f-main");
   main.appendChild(el("div", "f-title", post.title));
@@ -1822,6 +1866,7 @@ async function loadForumPost(id) {
       });
       if (error) throw error;
       toast("回复成功");
+      forumDetailMem.delete("p:" + id);
       loadForumPost(id);
     } catch (e) {
       toast("发送失败：" + (e.message || e));
@@ -1908,19 +1953,33 @@ async function downloadForumFile(p) {
 async function loadCourseForum(code) {
   const body = $("forumBody");
   if (!supabaseClient) { body.innerHTML = ""; body.appendChild(el("div", "f-empty", "云服务未就绪，请刷新页面后重试")); return; }
-  body.appendChild(el("div", "f-loading", "加载中…"));
+  const ck = "c:" + code;
+  const hit = forumDetailMem.get(ck);
   let posts;
+  if (hit && Date.now() - hit.ts < FORUM_DETAIL_MS) {
+    renderCourseForum(code, hit.posts);
+    return;
+  }
+  body.appendChild(el("div", "f-loading", "加载中…"));
   try {
-    const { data, error } = await supabaseClient.from("course_posts")
+    const { data, error } = await withFailover((c) => c.from("course_posts")
       .select("*").eq("course_code", code).eq("is_deleted", false)
-      .order("created_at", { ascending: true }).limit(200);
+      .order("created_at", { ascending: true }).limit(200));
     if (error) throw error;
     posts = data || [];
   } catch (e) {
+    if (!body.isConnected) return;
     body.innerHTML = "";
     body.appendChild(el("div", "f-empty", "加载失败：" + (e.message || e)));
     return;
   }
+  forumDetailMem.set(ck, { ts: Date.now(), posts });
+  renderCourseForum(code, posts);
+}
+
+function renderCourseForum(code, posts) {
+  const body = $("forumBody");
+  if (!body || !body.isConnected) return;
   body.innerHTML = "";
   body.appendChild(el("div", "f-tip", "课程交流与资料共享区 · 文件 ≤ 5MB · 请勿上传侵权或违规内容，违规将被移除"));
   if (!posts.length) body.appendChild(el("div", "f-empty", "还没有讨论或资料，来发第一条吧"));
@@ -1990,6 +2049,7 @@ async function loadCourseForum(code) {
       }, fileMeta));
       if (error) throw error;
       toast(f ? "资料已上传" : "已发送");
+      forumDetailMem.delete("c:" + code);
       loadCourseForum(code);
     } catch (e) {
       toast("发送失败：" + (e.message || e));
@@ -2195,7 +2255,7 @@ function chooseSchool(id) {
 /* ---------------- 日活统计（零个人信息：随机设备ID + 会话去重 + 服务端按天聚合） ---------------- */
 const DID_KEY = "kebiao:did";
 function statsPing() {
-  if (!supabaseClient) return;
+  if (!supabaseClient || !online()) return;
   try {
     if (sessionStorage.getItem("kebiao:pinged") === "1") return;
     sessionStorage.setItem("kebiao:pinged", "1");
@@ -2205,14 +2265,13 @@ function statsPing() {
       did = uid();
       try { localStorage.setItem(DID_KEY, did); } catch (e) {}
     }
-    supabaseClient.rpc("stats_ping", { p_device: did }).then(() => {}, () => {});
+    withFailover((c) => c.rpc("stats_ping", { p_device: did })).then(() => {}, () => {});
   } catch (e) {}
 }
 
 async function boot(sessionReady) {
   try {
     await sessionReady; /* 先等登录态就绪：避免已登录用户误见选校页/漏拉云端 */
-    if (supabaseClient) { try { await probeProxies(); } catch (e) {} } /* 双源择优 */
     const res = await fetch("./data/schools.json");
     if (!res.ok) throw new Error(res.status);
     const registry = await res.json();
