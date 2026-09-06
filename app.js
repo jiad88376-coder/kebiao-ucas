@@ -1379,26 +1379,35 @@ function copyShare(text, tip) {
   } else fallbackCopy(text, done);
 }
 
+function refTail() {
+  if (!authUser) return "";
+  const digits = String(authUser.email || "").split("@")[0].replace(/\D/g, "");
+  return digits.slice(-4) || String(authUser.id || "").slice(-4);
+}
+
 function shareLink() {
-  /* 手机/支持原生分享的设备：直接调系统分享面板（可发微信/QQ） */
-  if (typeof navigator.share === "function") {
-    navigator.share({ title: "课表 · 国科大课程表", text: SHARE_TEXT, url: SHARE_URL }).catch(() => {});
-    return;
-  }
-  const full = SHARE_TEXT + "\n👉 " + SHARE_URL;
+  const tail = refTail();
+  const url = SHARE_URL + (tail ? "?ref=" + tail : "");
+  const full = SHARE_TEXT + "\n👉 " + url;
   showModal(`
     <div class="modal-card">
       <h3>推荐「课表」给同学</h3>
-      <p class="share-hint">复制文案发给同学 / 群里，一起用更方便</p>
+      <p class="share-hint">课表图片在群里最直观 · 文案已备好</p>
       <div class="share-text">${SHARE_TEXT}
-👉 ${SHARE_URL}</div>
-      <div class="modal-actions">
-        <button class="ok" id="shCopyAll">复制文案</button>
-        <button class="cancel" id="shCopyUrl">只复制链接</button>
+👉 ${url}</div>
+      <div class="share-actions">
+        <button class="sa-main" id="shImg">📸 生成课表图片并分享</button>
+        <button class="sa-alt" id="shText">发送文案 + 链接</button>
+        <button class="sa-alt" id="shUrl">只复制链接</button>
       </div>
     </div>`);
-  $("shCopyAll").addEventListener("click", () => copyShare(full, "文案已复制，发给同学吧"));
-  $("shCopyUrl").addEventListener("click", () => copyShare(SHARE_URL, "链接已复制"));
+  $("shImg").addEventListener("click", shareImage);
+  $("shText").addEventListener("click", () => {
+    if (typeof navigator.share === "function") {
+      navigator.share({ title: "课表 · 国科大课程表", text: SHARE_TEXT, url }).catch(() => {});
+    } else copyShare(full, "文案已复制，发给同学吧");
+  });
+  $("shUrl").addEventListener("click", () => copyShare(url, "链接已复制"));
 }
 function fallbackCopy(text, done) {
   const ta = document.createElement("textarea");
@@ -1406,6 +1415,185 @@ function fallbackCopy(text, done) {
   ta.select();
   try { document.execCommand("copy"); done(); } catch (e) { prompt("复制链接：", text); }
   ta.remove();
+}
+
+/* ---------------- 课表图片（canvas 渲染 → 系统分享/保存） ---------------- */
+const CANVAS_FONT = "'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif";
+function attrFill(attr) {
+  if (/核心/.test(attr || "")) return "#E3EFFC";
+  if (/专业课/.test(attr || "")) return "#FCF1E3";
+  if (/公共/.test(attr || "")) return "#FBEBF2";
+  if (/研讨/.test(attr || "")) return "#E4F4F2";
+  if (/实验|实践/.test(attr || "")) return "#F6F1DE";
+  return "#EFF1F5";
+}
+function roundRectPath(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function wrapCanvasText(ctx, text, maxW, maxLines) {
+  const lines = [];
+  let cur = "";
+  for (const ch of String(text)) {
+    if (cur && ctx.measureText(cur + ch).width > maxW) {
+      lines.push(cur);
+      if (lines.length === maxLines) { lines[maxLines - 1] += "…"; return lines; }
+      cur = ch;
+    } else cur += ch;
+  }
+  if (cur) lines.push(cur);
+  return lines.slice(0, maxLines);
+}
+
+function drawShareImage() {
+  if (!state.codes.length) { toast("先添加课程再生成图片"); return null; }
+  const wk = viewWeek == null ? curWeek() : viewWeek;
+  const courses = state.codes.map(c => courseMap[c]).filter(Boolean)
+    .map(c => ({ ...c, sessions: (c.sessions || []).filter(s => inWeekSet(s.weekSet, wk)) }))
+    .filter(c => c.sessions.length);
+  if (!courses.length) { toast("本周没有课程，换一周再生成"); return null; }
+
+  const maxP = Math.max.apply(null, Object.keys(PERIOD_TIMES).map(Number));
+  const W = 1080, margin = 36, timeW = 92, headH = 56, brandH = 116, footH = 76;
+  const cellW = (W - margin * 2 - timeW) / 7;
+  const rowH = 88;
+  const H = brandH + headH + rowH * maxP + footH;
+  const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d");
+
+  ctx.fillStyle = "#f6f7fb"; ctx.fillRect(0, 0, W, H);
+
+  /* 品牌行 */
+  ctx.fillStyle = "#2F6FED";
+  roundRectPath(ctx, margin, 30, 56, 56, 14); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.font = "700 30px " + CANVAS_FONT;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("课", margin + 28, 60);
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#1f2329"; ctx.font = "700 32px " + CANVAS_FONT;
+  ctx.fillText("课表", margin + 70, 52);
+  ctx.fillStyle = "#8a919c"; ctx.font = "400 20px " + CANVAS_FONT;
+  const term = (catalog && catalog.meta && catalog.meta.term) || "";
+  ctx.fillText((term ? term + " · " : "") + "第 " + wk + " 周", margin + 70, 84);
+
+  const ox = margin + timeW, oy = brandH;
+  const today = dayIndexOfToday();
+  const isCur = wk === curWeek();
+
+  /* 表头（本周时高亮今天列） */
+  for (let d = 1; d <= 7; d++) {
+    const cx = ox + cellW * (d - 1) + cellW / 2;
+    if (isCur && d === today) {
+      ctx.fillStyle = "#2F6FED";
+      roundRectPath(ctx, ox + cellW * (d - 1) + 5, oy + 5, cellW - 10, headH - 10, 10); ctx.fill();
+      ctx.fillStyle = "#fff";
+    } else ctx.fillStyle = "#1f2329";
+    ctx.font = "600 23px " + CANVAS_FONT;
+    ctx.fillText(DAY_NAMES[d - 1], cx, oy + headH / 2);
+  }
+
+  /* 网格线 + 时间列 */
+  ctx.fillStyle = "#fbfcfd"; ctx.fillRect(margin, oy, timeW, rowH * maxP);
+  ctx.strokeStyle = "#e6e9f0"; ctx.lineWidth = 1;
+  for (let p = 0; p <= maxP; p++) {
+    const y = oy + headH + rowH * p;
+    ctx.beginPath(); ctx.moveTo(margin, y); ctx.lineTo(W - margin, y); ctx.stroke();
+  }
+  for (let d = 0; d <= 7; d++) {
+    const x = ox + cellW * d;
+    ctx.beginPath(); ctx.moveTo(x, oy); ctx.lineTo(x, oy + headH + rowH * maxP); ctx.stroke();
+  }
+  for (let p = 1; p <= maxP; p++) {
+    const cy = oy + headH + rowH * (p - 1) + rowH / 2;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#1f2329"; ctx.font = "600 22px " + CANVAS_FONT;
+    ctx.fillText(String(p), margin + timeW / 2, cy - 11);
+    ctx.fillStyle = "#8a919c"; ctx.font = "400 13px " + CANVAS_FONT;
+    ctx.fillText((PERIOD_TIMES[p] || "").split("-")[0], margin + timeW / 2, cy + 15);
+  }
+
+  /* 放置课程块（列内截断，与网页逻辑一致） */
+  const starts = {};
+  for (const c of courses) {
+    for (const s of c.sessions) {
+      if (!(s.day >= 1 && s.day <= 7 && s.p1 >= 1 && s.p2 >= s.p1 && s.p2 <= maxP)) continue;
+      (starts[s.p1 + "-" + s.day] = starts[s.p1 + "-" + s.day] || []).push({ c, s, span: s.p2 - s.p1 + 1 });
+    }
+  }
+  const colStarts = {};
+  for (const sk of Object.keys(starts)) {
+    const [p, d] = sk.split("-").map(Number);
+    (colStarts[d] = colStarts[d] || []).push({ p, items: starts[sk] });
+  }
+  for (const d of Object.keys(colStarts)) {
+    const arr = colStarts[d].sort((a, b) => a.p - b.p);
+    for (let i = 0; i < arr.length; i++) {
+      const end = i + 1 < arr.length ? arr[i + 1].p : maxP + 1;
+      const span = Math.max(1, Math.min(arr[i].items[0].span, end - arr[i].p));
+      for (const it of arr[i].items) it.span = span;
+    }
+  }
+  for (const sk of Object.keys(starts)) {
+    const [p, d] = sk.split("-").map(Number);
+    const list = starts[sk];
+    const n = list.length;
+    const cw = (cellW - 8 - (n - 1) * 4) / n;
+    for (let k = 0; k < n; k++) {
+      const it = list[k];
+      const x = ox + cellW * (d - 1) + 4 + k * (cw + 4);
+      const y = oy + headH + rowH * (p - 1) + 4;
+      const w = cw, h = it.span * rowH - 8;
+      ctx.fillStyle = attrFill(it.c.attr);
+      roundRectPath(ctx, x, y, w, h, 8); ctx.fill();
+
+      ctx.textAlign = "left"; ctx.textBaseline = "top";
+      ctx.fillStyle = "#243047"; ctx.font = "600 20px " + CANVAS_FONT;
+      let ty = y + 7;
+      for (const ln of wrapCanvasText(ctx, it.c.name, w - 14, 3)) {
+        ctx.fillText(ln, x + 7, ty); ty += 25;
+      }
+      const meta = [it.c.teacher, it.s.room].filter(Boolean).join(" · ");
+      if (meta && ty + 18 < y + h) {
+        ctx.fillStyle = "#6d7686"; ctx.font = "400 14px " + CANVAS_FONT;
+        ctx.fillText(wrapCanvasText(ctx, meta, w - 14, 1)[0] || "", x + 7, ty + 1);
+      }
+    }
+  }
+
+  /* 页脚水印 */
+  ctx.fillStyle = "#8a919c"; ctx.font = "400 17px " + CANVAS_FONT;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("数据仅供参考，以教务系统为准 · 生成你的课表 👉 jiad88376-coder.github.io/kebiao-ucas", W / 2, oy + headH + rowH * maxP + footH / 2);
+
+  return cv;
+}
+
+function shareImage() {
+  const cv = drawShareImage();
+  if (!cv) return;
+  const wk = viewWeek == null ? curWeek() : viewWeek;
+  cv.toBlob((blob) => {
+    if (!blob) { toast("图片生成失败"); return; }
+    const file = new File([blob], "kebiao.png", { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: "我的课表" }).catch(() => {});
+    } else {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "kebiao-week" + wk + ".png";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast("课表图片已保存，发群里安利同学吧");
+    }
+    hideModal();
+  }, "image/png");
 }
 
 /* ---------------- 备份 / 恢复 ---------------- */
@@ -1874,6 +2062,21 @@ function init() {
       </div>`);
     $("shOk").addEventListener("click", () => { hideModal(); addCodes(shared); });
     $("shCancel").addEventListener("click", hideModal);
+  } else {
+    /* 邀请链接落地（?ref=尾号） */
+    const ref = String(params.get("ref") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 8);
+    if (ref && !state.codes.length) {
+      showModal(`
+        <div class="modal-card">
+          <div class="auth-logo">🎁</div>
+          <h3>同学邀请你来用「课表」</h3>
+          <p class="share-hint">邀请码尾号 ${ref}<br>粘贴课程代码，3 秒生成整学期课表</p>
+          <div class="modal-actions">
+            <button class="ok" id="refGo">开始生成课表</button>
+          </div>
+        </div>`);
+      $("refGo").addEventListener("click", hideModal);
+    }
   }
 
   /* 默认视图: 本周；本周无课则顺延到最近有课的周 */
@@ -1896,7 +2099,25 @@ if (typeof document !== "undefined") {
         if (data.session) { authUser = data.session.user; updateAuthUI(); }
       }).catch(() => {})
     : Promise.resolve();
+  showWxGuide();
   boot(sessionReady);
+}
+
+/* ---------------- 微信内置浏览器引导（无法安装 PWA） ---------------- */
+const IS_WECHAT = (typeof navigator !== "undefined") && /MicroMessenger/i.test(navigator.userAgent);
+function showWxGuide() {
+  if (!IS_WECHAT) return;
+  try { if (sessionStorage.getItem("kebiao:wxguide") === "1") return; } catch (e) {}
+  const g = el("div", "wx-guide");
+  g.appendChild(el("span", "", "📲 微信内无法安装 App：点右上角 ⋯ 选「在浏览器打开」，即可装成手机应用"));
+  const x = el("button", "wxg-x", "✕");
+  x.addEventListener("click", () => {
+    g.remove();
+    try { sessionStorage.setItem("kebiao:wxguide", "1"); } catch (e) {}
+  });
+  g.appendChild(x);
+  const tb = document.querySelector(".topbar");
+  if (tb) tb.insertAdjacentElement("afterend", g);
 }
 
 /* ---------------- 学校选择与启动 ---------------- */

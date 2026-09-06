@@ -587,6 +587,28 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
   background: #f7f9fc; border: 1px solid var(--line); border-radius: 10px;
   padding: 10px 12px; margin: 12px 0 0; font-family: inherit;
 }
+.share-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.share-actions button {
+  width: 100%; padding: 12px; border-radius: 10px; border: none;
+  font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.sa-main {
+  background: linear-gradient(135deg, #3d82ff, #2F6FED); color: #fff;
+  box-shadow: 0 4px 12px rgba(47, 111, 237, .28);
+}
+.sa-main:active { transform: scale(.99); }
+.sa-alt { background: #f0f2f7; color: var(--text); font-weight: 500; }
+
+/* ---------- 微信内打开引导条 ---------- */
+.wx-guide {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px 10px 0; padding: 9px 12px;
+  background: #fff6e9; border: 1px solid #ffd9a8; color: #8a5a00;
+  border-radius: 12px; font-size: 12.5px; line-height: 1.55;
+  animation: bannerIn .28s var(--ease) both;
+}
+.wx-guide > span { flex: 1; }
+.wxg-x { flex: none; border: none; background: none; color: inherit; font-size: 13px; cursor: pointer; padding: 2px 4px; }
 
 /* ---------- Toast ---------- */
 .toast {
@@ -680,6 +702,8 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 [data-theme="dark"] .fb-back:active { background: #242a3a; }
 [data-theme="dark"] .menu-item:active { background: #242a3a; }
 [data-theme="dark"] .share-text { background: #181c26; }
+[data-theme="dark"] .sa-alt { background: #262b37; color: #c6cdd9; }
+[data-theme="dark"] .wx-guide { background: #33290f; border-color: #6b5322; color: #ffd9a8; }
 [data-theme="dark"] .drawer-grip { background: #3a4152; }
 [data-theme="dark"] .dr-close { background: #262b37; color: #c6cdd9; }
 [data-theme="dark"] .dr-sessions { background: #181c26; }
