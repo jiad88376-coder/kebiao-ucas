@@ -136,23 +136,52 @@ const SCHOOL_KEY = "kebiao:school";
 let viewWeek = 1; // 启动时由 applySchoolConfig 按校历设置（null=全部周次）
 let viewDay = 0;  // 手机端默认聚焦今天(0=全周)；桌面端全周；同样在 applySchoolConfig 设置
 
-/* ---------------- 云同步 (Supabase, 经 Netlify Function 反代) ---------------- */
-/* 直连 *.supabase.co 在国内被 GFW 阻断，统一经 Netlify Function 转发。
-   在 Netlify 站点打开时为同源；在 GitHub Pages 打开时跨域（Function 已带 CORS）。 */
-const SUPABASE_FUNC_PATH = "/.netlify/functions/supabase";
-const SUPABASE_URL = (typeof location !== "undefined" && location.hostname.endsWith("netlify.app"))
-  ? location.origin + SUPABASE_FUNC_PATH
-  : "https://kebiao-ucas.netlify.app" + SUPABASE_FUNC_PATH;
+/* ---------------- 云同步 (Supabase, 经反代) ---------------- */
+/* supabase.co 在国内被 GFW 阻断，全部云端流量走免费反代。
+   双源择优: Netlify(海外) + EdgeOne(腾讯边缘, 国内直连快)。
+   启动时并发探测两源，当前源健康则保持；仅当当前源故障或另一源快一倍以上才切换。 */
 const SUPABASE_KEY = "sb_publishable_ONe5Ft1rxeRt-rcdruXYoQ_sM0jgwLn";
+const PROXY_SOURCES = [
+  { id: "netlify", base: "https://kebiao-ucas.netlify.app", path: "/.netlify/functions/supabase" },
+  { id: "edgeone", base: "https://kebiao-ucas.edgeone.app", path: "/api/supabase" }
+];
 
 let supabaseClient = null;
 let authUser = null;
 let pushTimer = null;
+let proxyIdx = 0;
+
+function setProxy(i) {
+  proxyIdx = i;
+  const s = PROXY_SOURCES[i];
+  supabaseClient = (typeof window !== "undefined" && window.supabase)
+    ? window.supabase.createClient(s.base + s.path, SUPABASE_KEY)
+    : null;
+}
 
 function initSupabase() {
-  if (typeof window !== "undefined" && window.supabase) {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  }
+  setProxy(0);
+}
+
+async function probeProxies() {
+  const probe = async (s) => {
+    const t0 = Date.now();
+    try {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 4000);
+      const r = await fetch(s.base + s.path + "/rest/v1/site_stats?select=day&limit=1", {
+        headers: { apikey: SUPABASE_KEY },
+        signal: ctl.signal
+      });
+      clearTimeout(timer);
+      return r.ok ? Date.now() - t0 : 99999;
+    } catch (e) { return 99999; }
+  };
+  const lat = await Promise.all(PROXY_SOURCES.map(probe));
+  let best = 0;
+  for (let i = 0; i < lat.length; i++) if (lat[i] < lat[best]) best = i;
+  if (lat[best] === 99999) return; /* 两源全挂: 保持现状，等运行时报错提示 */
+  if (lat[proxyIdx] === 99999 || lat[best] * 2 < lat[proxyIdx]) setProxy(best);
 }
 
 /* 本地修改后 800ms 内合并推送云端（登录状态下） */
@@ -2183,6 +2212,7 @@ function statsPing() {
 async function boot(sessionReady) {
   try {
     await sessionReady; /* 先等登录态就绪：避免已登录用户误见选校页/漏拉云端 */
+    if (supabaseClient) { try { await probeProxies(); } catch (e) {} } /* 双源择优 */
     const res = await fetch("./data/schools.json");
     if (!res.ok) throw new Error(res.status);
     const registry = await res.json();
