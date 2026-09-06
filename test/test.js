@@ -80,5 +80,17 @@ ok(app.inWeekSet([[2, 5], [7, 12]], 8) === true, "第8周在 7-12");
 ok(app.inWeekSet(null, 5) === true, "缺失周次保守显示");
 ok(typeof app.fmtWeekRange(1) === "string" && /\./.test(app.fmtWeekRange(1)), "周区间格式化");
 
+console.log("== nearestCourseDay（跳周后对焦最近有课日） ==");
+const csMon = [{ sessions: [{ day: 1, p1: 1, p2: 2, weekSet: [[1, 18]] }] }];            // 只有周一有课
+const csTueThu = [{ sessions: [{ day: 2, p1: 3, p2: 4, weekSet: [[2, 20]] }] },
+                  { sessions: [{ day: 4, p1: 1, p2: 2, weekSet: [[2, 20]] }] }];
+ok(app.nearestCourseDay(2, csMon, new Date(2026, 8, 6)) === 1, "周日(第1周末)看第2周 → 周一");
+ok(app.nearestCourseDay(3, csMon, new Date(2026, 8, 13)) === 1, "第2周周日看第3周 → 周一");
+ok(app.nearestCourseDay(1, csMon, new Date(2026, 8, 5)) === 1, "周六看本周 → 周一");
+const monW2 = app.weekMonday(2); monW2.setDate(monW2.getDate() + 2); // 第2周周三
+ok(app.nearestCourseDay(2, csTueThu, monW2) === 4, "第2周周三(周二/周四均差1天) → 平手取靠后(周四)");
+ok(app.nearestCourseDay(5, [{ sessions: [{ day: 1, weekSet: [[1, 4]] }] }], new Date(2026, 8, 6)) === 0, "目标周全无课 → 0(不乱跳)");
+ok(app.nearestCourseDay(2, [{ sessions: [{ day: 1, weekSet: [[3, 4]] }] }], new Date(2026, 8, 6)) === 0, "该日不在目标周次 → 0");
+
 console.log(`\n通过 ${passed} 项测试`);
 if (process.exitCode) { console.error("存在失败项"); process.exit(1); }

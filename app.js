@@ -692,6 +692,45 @@ function smartDefaultWeek() {
   return w0;
 }
 
+/* 周 w 内离参考日期（默认今天）最近的有课的星期几（1-7）；全周无课返回 0。
+   平手（如周三看周二/周四都差一天）优先选更靠后的（向前看）。 */
+function nearestCourseDay(w, courses, ref) {
+  const byDay = new Array(8).fill(false);
+  for (const c of courses || []) {
+    for (const s of (c.sessions || [])) {
+      const d = Number(s.day);
+      if (d >= 1 && d <= 7 && inWeekSet(s.weekSet, w)) byDay[d] = true;
+    }
+  }
+  if (!byDay.some(Boolean)) return 0;
+  const n = ref || new Date();
+  const base = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  let best = 0, bestDist = Infinity;
+  for (let d = 1; d <= 7; d++) {
+    if (!byDay[d]) continue;
+    const dt = weekMonday(w);
+    dt.setDate(dt.getDate() + d - 1);
+    const dist = Math.abs(dt - base) / 86400000;
+    if (dist < bestDist - 1e-6 || (Math.abs(dist - bestDist) <= 1e-6 && d > best)) {
+      bestDist = dist;
+      best = d;
+    }
+  }
+  return best;
+}
+
+/* 切换周次后：当前聚焦的日子在新周次没课（且不是"今天"本身），
+   自动跳到该周离今天最近的有课日；有课则保持，方便跨周对比同一节课。 */
+function smartRealignDay() {
+  if (viewWeek == null || !viewDay) return;
+  if (viewWeek === curWeek() && viewDay === dayIndexOfToday()) return;
+  const courses = state.codes.map(code => courseMap[code]).filter(Boolean);
+  const has = courses.some(c => (c.sessions || []).some(s => Number(s.day) === viewDay && inWeekSet(s.weekSet, viewWeek)));
+  if (has) return;
+  const nd = nearestCourseDay(viewWeek, courses, new Date());
+  if (nd) viewDay = nd;
+}
+
 /* 星期聚焦条（仅手机端显示）：全周 / 一 / 二 / ... / 日 */
 function renderDayTabs() {
   const box = $("daytabs");
@@ -2098,11 +2137,13 @@ function init() {
   $("wkPrev").addEventListener("click", () => {
     if (viewWeek == null) viewWeek = curWeek();
     viewWeek = Math.max(1, viewWeek - 1);
+    smartRealignDay();
     render();
   });
   $("wkNext").addEventListener("click", () => {
     if (viewWeek == null) viewWeek = curWeek();
     viewWeek = Math.min(MAX_WEEK, viewWeek + 1);
+    smartRealignDay();
     render();
   });
   $("wkAll").addEventListener("click", () => {
@@ -2111,6 +2152,7 @@ function init() {
   });
   $("wkLabel").addEventListener("click", () => {
     viewWeek = curWeek();
+    smartRealignDay();
     render();
   });
 
@@ -2152,6 +2194,11 @@ function init() {
     const w = smartDefaultWeek();
     if (w !== w0) {
       viewWeek = w;
+      /* 手机单日视图: 顺延后聚焦该周离今天最近的有课日（否则会停在"今天"的星期几上，常是空课日） */
+      if (window.innerWidth <= 640) {
+        const nd = nearestCourseDay(w, state.codes.map(code => courseMap[code]).filter(Boolean), new Date());
+        if (nd) viewDay = nd;
+      }
       setTimeout(() => toast("第" + w0 + "周无课，已显示第" + w + "周"), 600);
     }
   }
@@ -2333,6 +2380,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     normalizeCode, parseCodes, weeksOverlap, sessionOverlap,
     conflictsBetween, findConflicts, fmtSession, daysLeft, DAY_NAMES, PERIOD_TIMES,
-    getSemesterWeek, inWeekSet, fmtWeekRange, SEMESTER_MONDAY, MAX_WEEK
+    getSemesterWeek, inWeekSet, fmtWeekRange, SEMESTER_MONDAY, MAX_WEEK,
+    weekMonday, nearestCourseDay
   };
 }
