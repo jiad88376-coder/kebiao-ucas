@@ -808,7 +808,8 @@ async function getWeather(lat, lon) {
 function buildWeatherCard() {
   const coords = weatherCoords();
   if (!coords) return null;
-  const wxDate = new Date(weekMonday(viewWeek));
+  const wk = viewWeek == null ? curWeek() : viewWeek; // 全部周次视图按本周取天气
+  const wxDate = new Date(weekMonday(wk));
   wxDate.setDate(wxDate.getDate() + viewDay - 1);
   const today0 = new Date(); today0.setHours(0, 0, 0, 0);
   const dd = Math.round((wxDate - today0) / 86400000);
@@ -1043,9 +1044,6 @@ function closeDrawer() {
   $("overlay").classList.add("hidden");
   drawerCourse = null;
 }
-if (typeof document !== "undefined") {
-  $("overlay").addEventListener("click", closeDrawer);
-}
 
 function renderDrawer() {
   const c = drawerCourse;
@@ -1170,6 +1168,7 @@ function notesView() {
       box.scrollIntoView({ block: "start" });
     });
     del.addEventListener("click", () => {
+      if (noteEditing === n.id) noteEditing = null;
       rec.notes = rec.notes.filter(x => x.id !== n.id);
       saveState(); renderDrawer();
     });
@@ -1230,6 +1229,7 @@ function homeworkView() {
       titleIn.value = h.title; dueIn.value = h.due || "";
     });
     del.addEventListener("click", () => {
+      if (hwEditing === h.id) hwEditing = null;
       rec.homework = rec.homework.filter(x => x.id !== h.id);
       saveState(); renderDrawer();
     });
@@ -1307,6 +1307,7 @@ function examsView() {
       typeIn.value = e.type; dateIn.value = e.date; timeIn.value = e.time || ""; locIn.value = e.location || "";
     });
     del.addEventListener("click", () => {
+      if (examEditing === e.id) examEditing = null;
       rec.exams = rec.exams.filter(x => x.id !== e.id);
       saveState(); renderDrawer();
     });
@@ -1468,6 +1469,8 @@ if (typeof document !== "undefined") {
   $("modal").addEventListener("click", (e) => {
     if (e.target === $("modal")) hideModal();
   });
+  /* 点遮罩关闭课程抽屉 */
+  $("overlay").addEventListener("click", closeDrawer);
 }
 
 /* ---------------- 论坛 ---------------- */
@@ -1693,6 +1696,7 @@ function composeForumPost() {
     const content = $("fpContent").value.trim();
     if (!title) { toast("请填写标题"); return; }
     if (!content) { toast("请填写正文"); return; }
+    if (content.length > 4000) { toast("正文过长（≤4000 字）"); return; }
     $("fpOk").disabled = true;
     try {
       const { error } = await supabaseClient.from("forum_posts").insert({
@@ -1978,6 +1982,7 @@ async function loadSchoolAndStart(sid) {
   } catch (err) {
     console.error("loadSchool", err);
     toast("该校数据加载失败，请检查网络后刷新");
+    state.codes.length ? showMain() : showWelcome(); // 别白屏
   }
 }
 
