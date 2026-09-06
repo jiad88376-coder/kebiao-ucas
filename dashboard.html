@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>运行监测 · 课表</title>
+<link rel="icon" href="./icons/icon-192.png">
+<script>
+try {
+  var _t = localStorage.getItem("kebiao:theme");
+  var _d = _t === "dark" || (_t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.theme = _d ? "dark" : "light";
+} catch (e) {}
+</script>
+<style>
+:root {
+  --bg: #f5f7fb; --card: #fff; --text: #1c2430; --muted: #7a8399; --line: #e6eaf2;
+  --primary: #2F6FED; --ok: #159957; --warn: #d97a1a;
+  --shadow: 0 6px 24px rgba(28, 36, 48, .08);
+}
+[data-theme="dark"] {
+  --bg: #12151c; --card: #1a1f2b; --text: #e8ecf4; --muted: #8b94a7; --line: #262b37;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; padding-bottom: 40px; }
+.hd { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; position: sticky; top: 0; background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); z-index: 5; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 16px; }
+.logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #3d82ff, #2F6FED); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; }
+.live { font-size: 12px; font-weight: 500; color: var(--muted); }
+.live.ok { color: var(--ok); }
+.live.old { color: var(--warn); }
+#refresh { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 9px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+#refresh:active { transform: scale(.97); }
+main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 13px 14px; box-shadow: var(--shadow); }
+.kpi .n { font-size: 24px; font-weight: 800; letter-spacing: .5px; }
+.kpi .n small { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+.kpi .t { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.kpi.hl { border-color: rgba(47, 111, 237, .35); }
+.kpi.hl .n { color: var(--primary); }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 14px; box-shadow: var(--shadow); }
+.panel h2 { margin: 0 0 12px; font-size: 14.5px; }
+.panel svg { width: 100%; height: auto; display: block; }
+.panel .bar-o { fill: var(--primary); }
+.panel .bar-d { fill: #8fb3f7; }
+[data-theme="dark"] .panel .bar-d { fill: #4a6db3; }
+.panel .axis { font-size: 10px; fill: var(--muted); }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.cap { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.cap .c { border: 1px dashed var(--line); border-radius: 12px; padding: 11px 12px; font-size: 13px; }
+.cap .c b { display: block; font-size: 13.5px; margin-bottom: 3px; }
+.cap .c span { color: var(--muted); font-size: 12.5px; }
+.note { color: var(--muted); font-size: 12px; margin: 12px 2px 0; }
+.err { padding: 30px 16px; text-align: center; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<header class="hd">
+  <div class="brand"><span class="logo">课</span>运行监测<span id="live" class="live">加载中…</span></div>
+  <button id="refresh">↻ 刷新</button>
+</header>
+<main>
+  <div class="cards" id="cards"></div>
+  <section class="panel">
+    <h2>近 30 天 · 每日打开 / 设备</h2>
+    <div id="chart"></div>
+    <div class="legend"><span><i class="bar-o"></i>打开次数</span><span><i class="bar-d"></i>独立设备</span></div>
+  </section>
+  <section class="panel">
+    <h2>容量参照（免费额度）</h2>
+    <div class="cap">
+      <div class="c"><b>GitHub Pages</b><span>带宽约 100GB/月 · 静态资源，数千日活无压力</span></div>
+      <div class="c"><b>Supabase</b><span>数据库 500MB · 存储 1GB · 出流量 5GB/月 · Auth 5 万月活</span></div>
+      <div class="c"><b>Netlify Functions</b><span>12.5 万次调用/月 · 论坛瓶颈 ≈ 日活 400</span></div>
+    </div>
+    <p class="note">口径说明：打开次数 = 每次进入网站 +1（会话内去重）；独立设备 = 当天去重后的随机设备 ID 数。连续多日 >100 时建议升级方案。</p>
+  </section>
+</main>
+<div id="errbox"></div>
+<script>
+var API_KEY = "sb_publishable_ONe5Ft1rxeRt-rcdruXYoQ_sM0jgwLn";
+var API = "https://kebiao-ucas.netlify.app/.netlify/functions/supabase/rest/v1/site_stats?select=day,opens,devices&order=day.desc&limit=90";
+
+function beijingToday() {
+  return new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+}
+
+function render(rows) {
+  var box = document.getElementById("errbox");
+  box.innerHTML = "";
+  if (!Array.isArray(rows) || !rows.length) {
+    document.getElementById("cards").innerHTML = '<div class="err">暂无数据 — 今天第一个人打开后就有曲线了</div>';
+    document.getElementById("chart").innerHTML = "";
+    return;
+  }
+  var today = rows[0];
+  var yest = rows[1] || { opens: 0, devices: 0 };
+  var wk = rows.slice(0, 7), sum7 = 0;
+  for (var i = 0; i < wk.length; i++) sum7 += wk[i].opens;
+  var sum30 = 0;
+  for (var j = 0; j < Math.min(rows.length, 30); j++) sum30 += rows[j].opens;
+  document.getElementById("cards").innerHTML =
+    card(today.opens, "今日打开", true) + card(today.devices, "今日设备") +
+    card(yest.opens, "昨日打开") + card((sum7 / wk.length).toFixed(1), "7日日均打开") +
+    card(sum30, "30天累计打开");
+  drawChart(rows.slice(0, 30).reverse());
+  var live = document.getElementById("live");
+  if (today.day === beijingToday()) {
+    live.textContent = "🟢 实时 · " + new Date().toTimeString().slice(0, 5) + " 更新";
+    live.className = "live ok";
+  } else {
+    live.textContent = "🟠 数据截至 " + today.day;
+    live.className = "live old";
+  }
+}
+
+function card(n, label, hl) {
+  return '<div class="kpi' + (hl ? " hl" : "") + '"><div class="n">' + n + '</div><div class="t">' + label + '</div></div>';
+}
+
+function drawChart(days) {
+  var W = 720, H = 210, PADL = 8, PADB = 22, PADT = 14;
+  var maxV = 1;
+  for (var i = 0; i < days.length; i++) maxV = Math.max(maxV, days[i].opens, days[i].devices);
+  var bw = W / days.length, inner = bw * 0.56;
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img">';
+  var grid = 4, hh = H - PADB - PADT;
+  for (var g = 1; g <= grid; g++) {
+    var gy = PADT + hh - hh * g / grid;
+    s += '<line x1="0" y1="' + gy + '" x2="' + W + '" y2="' + gy + '" stroke="var(--line)" stroke-width="1"/>';
+  }
+  for (var k = 0; k < days.length; k++) {
+    var x = k * bw, ho = Math.round(hh * days[k].opens / maxV), hd = Math.round(hh * days[k].devices / maxV);
+    var barW = Math.min(inner, 18), barD = Math.max(3, barW * 0.42);
+    s += '<rect class="bar-o" x="' + (x + (bw - barW) / 2) + '" y="' + (PADT + hh - ho) + '" width="' + barW + '" height="' + Math.max(ho, days[k].opens ? 2 : 0) + '" rx="3"><title>' + days[k].day + ' 打开 ' + days[k].opens + '</title></rect>';
+    s += '<rect class="bar-d" x="' + (x + (bw - barD) / 2) + '" y="' + (PADT + hh - hd) + '" width="' + barD + '" height="' + Math.max(hd, days[k].devices ? 2 : 0) + '" rx="2"><title>' + days[k].day + ' 设备 ' + days[k].devices + '</title></rect>';
+    if (k % 5 === 0 || k === days.length - 1) {
+      s += '<text class="axis" x="' + (x + bw / 2) + '" y="' + (H - 6) + '" text-anchor="middle">' + days[k].day.slice(5) + '</text>';
+    }
+  }
+  s += '<text class="axis" x="2" y="' + (PADT + 8) + '">峰值 ' + maxV + '</text>';
+  s += '</svg>';
+  document.getElementById("chart").innerHTML = s;
+}
+
+function load() {
+  fetch(API, { headers: { apikey: API_KEY } })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(render)
+    .catch(function (e) {
+      document.getElementById("live").textContent = "🔴 无法连接数据源";
+      document.getElementById("live").className = "live old";
+      document.getElementById("errbox").innerHTML = '<div class="err">数据加载失败：' + (e.message || e) + '</div>';
+    });
+}
+document.getElementById("refresh").addEventListener("click", load);
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

@@ -1,8 +1,9 @@
 /* Service Worker: 离线缓存应用外壳 + 课程库 */
-const CACHE = "kebiao-ucas-v18";
+const CACHE = "kebiao-ucas-v19";
 const ASSETS = [
   "./",
   "./index.html",
+  "./dashboard.html",
   "./style.css",
   "./app.js",
   "./vendor/supabase.min.js",
@@ -15,7 +16,7 @@ const ASSETS = [
   "./icons/apple-touch-icon.png"
 ];
 /* 核心代码走"网络优先"：在线必拿最新版，离线回落缓存 */
-const CORE = ["index.html", "app.js", "style.css", "manifest.json"];
+const CORE = ["index.html", "dashboard.html", "app.js", "style.css", "manifest.json"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
