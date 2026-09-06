@@ -1742,7 +1742,7 @@ async function loadForumPost(id) {
     btn.disabled = true; btn.textContent = "发送中…";
     try {
       const { error } = await supabaseClient.from("forum_replies").insert({
-        post_id: id, user_id: authUser.id, author: authUser.email, content: t
+        post_id: id, user_id: authUser.id, author: authorShort(authUser.email), content: t
       });
       if (error) throw error;
       toast("回复成功");
@@ -1791,7 +1791,7 @@ function composeForumPost() {
     $("fpOk").disabled = true;
     try {
       const { error } = await supabaseClient.from("forum_posts").insert({
-        user_id: authUser.id, author: authUser.email, title: t, content: c
+        user_id: authUser.id, author: authorShort(authUser.email), title: t, content: c
       });
       if (error) throw error;
       hideModal();
@@ -1909,7 +1909,7 @@ async function loadCourseForum(code) {
         fileMeta = { file_path: path, file_name: f.name, file_size: f.size };
       }
       const { error } = await supabaseClient.from("course_posts").insert(Object.assign({
-        course_code: code, user_id: authUser.id, author: authUser.email, content: text
+        course_code: code, user_id: authUser.id, author: authorShort(authUser.email), content: text
       }, fileMeta));
       if (error) throw error;
       toast(f ? "资料已上传" : "已发送");
