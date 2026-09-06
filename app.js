@@ -1203,14 +1203,67 @@ function showCodesModal() {
   $("codesCancel").addEventListener("click", hideModal);
 }
 
-/* ---------------- 分享 ---------------- */
-function shareLink() {
-  if (!state.codes.length) { toast("课表还是空的"); return; }
-  const url = `${location.origin}${location.pathname}?c=${state.codes.join(",")}`;
-  const done = () => toast("分享链接已复制，发给同学即可");
+/* ---------------- 更多菜单（论坛/代码/备份收纳于此） ---------------- */
+function showMoreMenu() {
+  showModal(`
+    <h3>更多</h3>
+    <div class="menu-list">
+      <button class="menu-item" id="mmForum"><span class="mi-ico">💬</span><span>自由论坛</span></button>
+      <button class="menu-item" id="mmCodes"><span class="mi-ico">⌨️</span><span>粘贴课程代码</span></button>
+      <button class="menu-item" id="mmBackup"><span class="mi-ico">⤓</span><span>备份与恢复</span></button>
+    </div>`);
+  $("mmForum").addEventListener("click", () => { hideModal(); showForum("list"); });
+  $("mmCodes").addEventListener("click", () => { hideModal(); showCodesModal(); });
+  $("mmBackup").addEventListener("click", () => { hideModal(); backupModal(); });
+}
+
+function backupModal() {
+  showModal(`
+    <h3>备份与恢复</h3>
+    <p style="color:var(--muted);font-size:13px">课表与笔记仅保存在本机浏览器。换手机或清缓存前请先导出备份。</p>
+    <div class="modal-actions">
+      <button class="ok" id="bkpExport">导出备份</button>
+      <button class="cancel" id="bkpImport">导入备份</button>
+    </div>`);
+  $("bkpExport").addEventListener("click", () => { hideModal(); exportBackup(); });
+  $("bkpImport").addEventListener("click", () => { hideModal(); $("fileImport").click(); });
+}
+
+/* ---------------- 分享（推荐应用给同学） ---------------- */
+const SHARE_URL = "https://jiad88376-coder.github.io/kebiao-ucas/";
+const SHARE_TEXT = [
+  "「课表」— 国科大人自己的课表工具",
+  "✓ 粘贴课程代码，3 秒生成整学期课表",
+  "✓ 笔记 / 作业 DDL / 考试安排一站式管理",
+  "✓ 云同步，手机电脑互通，还能装成手机 App",
+  "✓ 每门课自带讨论区，资料共享"
+].join("\n");
+
+function copyShare(text, tip) {
+  const done = () => toast(tip);
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url).then(done).catch(() => fallbackCopy(url, done));
-  } else fallbackCopy(url, done);
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else fallbackCopy(text, done);
+}
+
+function shareLink() {
+  /* 手机/支持原生分享的设备：直接调系统分享面板（可发微信/QQ） */
+  if (typeof navigator.share === "function") {
+    navigator.share({ title: "课表 · 国科大课程表", text: SHARE_TEXT, url: SHARE_URL }).catch(() => {});
+    return;
+  }
+  const full = SHARE_TEXT + "\n👉 " + SHARE_URL;
+  showModal(`
+    <h3>推荐「课表」给同学</h3>
+    <p class="share-hint">复制文案发给同学 / 群里，一起用更方便</p>
+    <div class="share-text">${SHARE_TEXT}
+👉 ${SHARE_URL}</div>
+    <div class="modal-actions">
+      <button class="ok" id="shCopyAll">复制文案</button>
+      <button class="cancel" id="shCopyUrl">只复制链接</button>
+    </div>`);
+  $("shCopyAll").addEventListener("click", () => copyShare(full, "文案已复制，发给同学吧"));
+  $("shCopyUrl").addEventListener("click", () => copyShare(SHARE_URL, "链接已复制"));
 }
 function fallbackCopy(text, done) {
   const ta = document.createElement("textarea");
@@ -1636,10 +1689,9 @@ function init() {
     addCodes(raw);
     if (state.codes.length) showMain();
   });
-  $("btnCodes").addEventListener("click", showCodesModal);
   $("btnShare").addEventListener("click", shareLink);
   $("btnLogin").addEventListener("click", showAuthModal);
-  $("btnForum").addEventListener("click", () => showForum("list"));
+  $("btnMore").addEventListener("click", showMoreMenu);
   $("btnTheme").addEventListener("click", cycleTheme);
   applyTheme(themePref());
 
@@ -1661,17 +1713,6 @@ function init() {
   $("wkLabel").addEventListener("click", () => {
     viewWeek = curWeek();
     render();
-  });
-  $("btnBackup").addEventListener("click", () => {
-    showModal(`
-      <h3>备份与恢复</h3>
-      <p style="color:var(--muted);font-size:13px">课表与笔记仅保存在本机浏览器。换手机或清缓存前请先导出备份。</p>
-      <div class="modal-actions">
-        <button class="ok" id="bkpExport">导出备份</button>
-        <button class="cancel" id="bkpImport">导入备份</button>
-      </div>`);
-    $("bkpExport").addEventListener("click", () => { hideModal(); exportBackup(); });
-    $("bkpImport").addEventListener("click", () => { hideModal(); $("fileImport").click(); });
   });
 
   /* URL 分享参数 */

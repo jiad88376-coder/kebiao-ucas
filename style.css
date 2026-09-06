@@ -65,6 +65,7 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
   height: 34px; white-space: nowrap;
 }
 .ib-ico { font-size: 14px; line-height: 1; }
+.more-ico { font-size: 17px; font-weight: 700; letter-spacing: 1px; margin-top: -3px; }
 .icon-btn:active { background: #eef1f7; }
 
 /* ---------- 欢迎页 ---------- */
@@ -553,6 +554,22 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .si-short { font-size: 12px; color: var(--muted); }
 .school-none { padding: 18px; color: var(--muted); font-size: 13px; }
 
+/* ---------- 更多菜单 / 分享 ---------- */
+.menu-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.menu-item {
+  display: flex; align-items: center; gap: 12px; padding: 13px 14px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--card);
+  font-size: 15px; color: var(--text); cursor: pointer; text-align: left; width: 100%;
+}
+.menu-item:active { background: #f0f3fa; }
+.mi-ico { font-size: 17px; flex: none; }
+.share-hint { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+.share-text {
+  white-space: pre-wrap; word-break: break-word; font-size: 13.5px; line-height: 1.75;
+  background: #f7f9fc; border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; margin: 12px 0 0; font-family: inherit;
+}
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed; left: 50%; bottom: 46px; z-index: 80;
@@ -639,6 +656,9 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 [data-theme="dark"] .f-loginbar { background: #182338; border-color: #33447a; color: #a8c0f5; }
 [data-theme="dark"] .f-del { color: #e08c8c; }
 [data-theme="dark"] .fb-back:active { background: #242a3a; }
+[data-theme="dark"] .menu-item { border-color: #2f3646; }
+[data-theme="dark"] .menu-item:active { background: #242a3a; }
+[data-theme="dark"] .share-text { background: #181c26; }
 [data-theme="dark"] .drawer-grip { background: #3a4152; }
 [data-theme="dark"] .dr-close { background: #262b37; color: #c6cdd9; }
 [data-theme="dark"] .dr-sessions { background: #181c26; }
