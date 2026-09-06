@@ -260,7 +260,10 @@ if (typeof document !== "undefined" && typeof matchMedia === "function") {
 }
 
 function updateAuthUI() {
-  $("btnLogin").textContent = authUser ? "☁ " + (authUser.email || "已登录").split("@")[0] : "☁ 登录";
+  const lbl = document.querySelector("#btnLogin .ib-label");
+  const txt = authUser ? (authUser.email || "已登录").split("@")[0] : "登录";
+  if (lbl) lbl.textContent = txt;
+  else $("btnLogin").textContent = "☁ " + txt;
 }
 
 function showAuthModal() {
