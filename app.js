@@ -840,6 +840,7 @@ async function fillWeatherCard(strip, date, dd) {
     const ds = date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
     const nowH = new Date().getHours();
     strip.innerHTML = "";
+    let centerEl = null;
     for (let i = 0; i < H.time.length; i++) {
       if (!H.time[i].startsWith(ds)) continue;
       const hh = Number(H.time[i].slice(11, 13));
@@ -852,8 +853,17 @@ async function fillWeatherCard(strip, date, dd) {
       const p = H.precipitation_probability ? H.precipitation_probability[i] : null;
       item.appendChild(el("span", "wx-p", p != null && p >= 20 ? "💧" + p + "%" : ""));
       strip.appendChild(item);
+      if (isNow) centerEl = item;                 // 今天: 当前小时居中
+      else if (dd > 0 && hh === 12) centerEl = item; // 未来日: 中午居中
     }
-    if (!strip.children.length) strip.appendChild(el("div", "wx-none", "暂无预报"));
+    if (!strip.children.length) {
+      strip.appendChild(el("div", "wx-none", "暂无预报"));
+    } else if (centerEl) {
+      /* 默认将目标小时滚动到条带中央 */
+      requestAnimationFrame(() => {
+        strip.scrollLeft = Math.max(0, centerEl.offsetLeft - (strip.clientWidth - centerEl.offsetWidth) / 2);
+      });
+    }
   } catch (e) {
     if (!strip.isConnected) return;
     strip.innerHTML = "";
