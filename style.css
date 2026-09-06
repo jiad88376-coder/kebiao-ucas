@@ -75,8 +75,8 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
 .welcome .hint { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
 .welcome textarea {
   width: 100%; min-height: 150px; padding: 12px 14px; border: 1px solid var(--line);
-  border-radius: var(--radius); font-size: 14px; font-family: ui-monospace, Menlo, Consolas, monospace;
-  resize: vertical; background: var(--card); outline: none;
+  border-radius: var(--radius); font-size: 16px; font-family: ui-monospace, Menlo, Consolas, monospace;
+  resize: none; overflow-y: auto; background: var(--card); outline: none;
   transition: border-color .15s, box-shadow .15s;
 }
 .welcome textarea:focus { border-color: var(--primary); box-shadow: var(--ring); }
@@ -93,7 +93,7 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
 .searchbox { position: relative; text-align: left; }
 .searchbox input, .searchbar input {
   width: 100%; padding: 11px 14px; border: 1px solid var(--line); border-radius: 11px;
-  background: var(--card); font-size: 15px; outline: none;
+  background: var(--card); font-size: 16px; outline: none;
   transition: border-color .15s, box-shadow .15s;
 }
 .searchbox input:focus, .searchbar input:focus { border-color: var(--primary); box-shadow: var(--ring); }
@@ -324,11 +324,15 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .r-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .r-form input, .r-form select, .r-form textarea {
   width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px;
-  font-size: 14px; background: var(--card); outline: none; font-family: inherit;
+  font-size: 16px; background: var(--card); outline: none; font-family: inherit;
   transition: border-color .15s, box-shadow .15s;
 }
 .r-form input:focus, .r-form select:focus, .r-form textarea:focus { border-color: var(--primary); box-shadow: var(--ring); }
-.r-form textarea { min-height: 74px; resize: vertical; }
+.r-form textarea { min-height: 74px; resize: none; overflow-y: auto; }
+.r-form.editing { outline: 2px dashed rgba(47, 111, 237, .45); outline-offset: 4px; border-radius: 10px; }
+.input-count { font-size: 11px; color: var(--muted); text-align: right; line-height: 1.4; }
+.input-count.near { color: #d97a1a; }
+.input-count.over { color: #d23b3b; }
 .r-form .row2 { display: flex; gap: 8px; }
 .r-form .row2 > * { flex: 1; }
 .r-btn {
@@ -368,7 +372,7 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 }
 .modal-card h3 { margin: 0 0 10px; font-size: 17px; }
 .modal-card textarea { width: 100%; min-height: 110px; padding: 10px; border: 1px solid var(--line);
-  border-radius: 9px; font-size: 14px; font-family: ui-monospace, monospace; resize: vertical;
+  border-radius: 9px; font-size: 16px; font-family: ui-monospace, monospace; resize: none; overflow-y: auto;
   outline: none; transition: border-color .15s, box-shadow .15s; }
 .modal-card textarea:focus { border-color: var(--primary); box-shadow: var(--ring); }
 .modal-actions { display: flex; gap: 8px; margin-top: 14px; }
@@ -540,7 +544,7 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
   display: flex; flex-direction: column; gap: 8px; }
 .f-compose textarea {
   width: 100%; min-height: 70px; padding: 10px; border: 1px solid var(--line);
-  border-radius: 11px; font-size: 14.5px; font-family: inherit; resize: none;
+  border-radius: 11px; font-size: 16px; font-family: inherit; resize: none; overflow-y: auto;
   background: var(--card); outline: none;
   transition: border-color .15s, box-shadow .15s;
 }

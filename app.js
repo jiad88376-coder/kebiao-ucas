@@ -310,6 +310,8 @@ function showAuthModal() {
   const emailEl = $("authEmail");
   const passEl = $("authPass");
   $("authLogin").addEventListener("click", () => doPasswordLogin(emailEl, passEl));
+  emailEl.addEventListener("keydown", (e) => { if (e.key === "Enter") passEl.focus(); });
+  passEl.addEventListener("keydown", (e) => { if (e.key === "Enter") doPasswordLogin(emailEl, passEl); });
   $("authSignup").addEventListener("click", () => showAuthSignupUI(emailEl.value));
   $("authCancel").addEventListener("click", hideModal);
 }
@@ -416,6 +418,9 @@ function showAuthSignupUI(email) {
   });
   $("suBack").addEventListener("click", () => showAuthModal());
   $("suCancel").addEventListener("click", hideModal);
+  emailEl.addEventListener("keydown", (e) => { if (e.key === "Enter") $("suSend").click(); });
+  codeEl.addEventListener("keydown", (e) => { if (e.key === "Enter") passEl.focus(); });
+  passEl.addEventListener("keydown", (e) => { if (e.key === "Enter") $("suDone").click(); });
 }
 
 let catalog = null;
@@ -466,6 +471,38 @@ function toast(msg, ms = 2200) {
 }
 function showModal(html) { $("modal").innerHTML = html; $("modal").classList.remove("hidden"); }
 function hideModal() { $("modal").classList.add("hidden"); }
+
+/* ---------------- 输入体验工具 ---------------- */
+/* 输入时自动增高（上限 maxH px），避免在小框里滚动 */
+function autoGrow(ta, maxH) {
+  ta.style.height = "auto";
+  ta.style.height = Math.min(ta.scrollHeight, maxH || 260) + "px";
+}
+function bindAutoGrow(ta, maxH) {
+  ta.addEventListener("input", () => autoGrow(ta, maxH));
+  autoGrow(ta, maxH);
+}
+/* 字数计数器：接近上限变橙，超限变红 */
+function attachCount(ta, max) {
+  const c = el("div", "input-count");
+  const upd = () => {
+    const n = ta.value.length;
+    c.textContent = n + "/" + max;
+    c.style.display = n ? "block" : "none";
+    c.classList.toggle("near", n > max * 0.85 && n <= max);
+    c.classList.toggle("over", n > max);
+  };
+  ta.addEventListener("input", upd);
+  upd();
+  ta.insertAdjacentElement("afterend", c);
+  return c;
+}
+/* Ctrl/Cmd + Enter 快捷发送 */
+function ctrlEnter(ta, onSend) {
+  ta.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); onSend(); }
+  });
+}
 
 /* ---------------- 课程解析与添加 ---------------- */
 function resolveCodes(rawCodes) {
@@ -981,44 +1018,53 @@ function buildCourseBlock(course, session, conflictSess, weekView) {
 /* ---------------- 搜索 ---------------- */
 function bindSearch(inputEl, sugEl, onPick) {
   let timer = null;
+  let lastHits = [];
+  const pick = (c) => {
+    sugEl.innerHTML = "";
+    inputEl.value = "";
+    lastHits = [];
+    addCodes([c.code]);
+    if (onPick) onPick();
+  };
+  const search = () => {
+    const q = inputEl.value.trim();
+    if (!q) { sugEl.innerHTML = ""; lastHits = []; return; }
+    const ql = q.toLowerCase();
+    const hits = [];
+    for (const c of catalog.courses) {
+      if (c.name.toLowerCase().includes(ql) || c.code.toLowerCase().includes(ql)) {
+        hits.push(c);
+        if (hits.length >= 12) break;
+      }
+    }
+    lastHits = hits;
+    sugEl.innerHTML = "";
+    if (!hits.length) {
+      const d = el("div", "sug-item", "未找到，试试课程代码？");
+      sugEl.appendChild(d);
+      return;
+    }
+    for (const c of hits) {
+      const item = el("div", "sug-item");
+      const name = el("div", "sug-name", c.name);
+      name.appendChild(el("span", "campus campus-" + c.campus, CAMPUS_NAME[c.campus] || c.campus));
+      name.appendChild(el("span", "sug-code", c.code));
+      const meta = el("div", "sug-meta");
+      const first = c.sessions[0];
+      meta.textContent = `${c.credit != null ? c.credit + "分" : ""} ${c.teacher || ""}${first ? " · " + fmtSession(first) : " · 时间待定"}`;
+      item.appendChild(name);
+      item.appendChild(meta);
+      item.addEventListener("click", () => pick(c));
+      sugEl.appendChild(item);
+    }
+  };
   inputEl.addEventListener("input", () => {
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      const q = inputEl.value.trim();
-      if (!q) { sugEl.innerHTML = ""; return; }
-      const ql = q.toLowerCase();
-      const hits = [];
-      for (const c of catalog.courses) {
-        if (c.name.toLowerCase().includes(ql) || c.code.toLowerCase().includes(ql)) {
-          hits.push(c);
-          if (hits.length >= 12) break;
-        }
-      }
-      sugEl.innerHTML = "";
-      if (!hits.length) {
-        const d = el("div", "sug-item", "未找到，试试课程代码？");
-        sugEl.appendChild(d);
-        return;
-      }
-      for (const c of hits) {
-        const item = el("div", "sug-item");
-        const name = el("div", "sug-name", c.name);
-        name.appendChild(el("span", "campus campus-" + c.campus, CAMPUS_NAME[c.campus] || c.campus));
-        name.appendChild(el("span", "sug-code", c.code));
-        const meta = el("div", "sug-meta");
-        const first = c.sessions[0];
-        meta.textContent = `${c.credit != null ? c.credit + "分" : ""} ${c.teacher || ""}${first ? " · " + fmtSession(first) : " · 时间待定"}`;
-        item.appendChild(name);
-        item.appendChild(meta);
-        item.addEventListener("click", () => {
-          sugEl.innerHTML = "";
-          inputEl.value = "";
-          addCodes([c.code]);
-          if (onPick) onPick();
-        });
-        sugEl.appendChild(item);
-      }
-    }, 150);
+    timer = setTimeout(search, 150);
+  });
+  /* 回车 = 选中第一个建议 */
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && lastHits.length) { e.preventDefault(); pick(lastHits[0]); }
   });
   document.addEventListener("click", (e) => {
     if (!sugEl.contains(e.target) && e.target !== inputEl) sugEl.innerHTML = "";
@@ -1130,7 +1176,12 @@ function notesView() {
   row2.appendChild(dateIn);
   row2.appendChild(titleIn);
   const contentIn = el("textarea"); contentIn.placeholder = "记笔记…";
+  bindAutoGrow(contentIn, 300);
   const saveBtn = el("button", "r-btn", "保存笔记");
+  const setEditing = (on) => {
+    form.classList.toggle("editing", !!on);
+    saveBtn.textContent = on ? "保存修改" : "保存笔记";
+  };
   saveBtn.addEventListener("click", () => {
     const title = titleIn.value.trim() || "未命名笔记";
     const content = contentIn.value.trim();
@@ -1143,6 +1194,9 @@ function notesView() {
       rec.notes.push({ id: uid(), date: dateIn.value, title, content });
     }
     saveState();
+    setEditing(false);
+    dateIn.value = todayStr(); titleIn.value = ""; contentIn.value = "";
+    autoGrow(contentIn, 300);
     renderDrawer();
     toast("已保存");
   });
@@ -1165,7 +1219,10 @@ function notesView() {
     edit.addEventListener("click", () => {
       noteEditing = n.id;
       dateIn.value = n.date; titleIn.value = n.title; contentIn.value = n.content;
+      setEditing(true);
+      autoGrow(contentIn, 300);
       box.scrollIntoView({ block: "start" });
+      contentIn.focus();
     });
     del.addEventListener("click", () => {
       if (noteEditing === n.id) noteEditing = null;
@@ -1193,6 +1250,10 @@ function homeworkView() {
   row2.appendChild(titleIn);
   row2.appendChild(dueIn);
   const saveBtn = el("button", "r-btn", hwEditing ? "保存修改" : "添加作业");
+  const setHwEditing = (on) => {
+    form.classList.toggle("editing", !!on);
+    saveBtn.textContent = on ? "保存修改" : "添加作业";
+  };
   saveBtn.addEventListener("click", () => {
     const title = titleIn.value.trim();
     if (!title) { toast("请填写作业内容"); return; }
@@ -1204,6 +1265,8 @@ function homeworkView() {
       rec.homework.push({ id: uid(), title, due: dueIn.value, done: false });
     }
     saveState();
+    setHwEditing(false);
+    titleIn.value = ""; dueIn.value = "";
     renderDrawer();
   });
   form.appendChild(row2);
@@ -1227,6 +1290,8 @@ function homeworkView() {
     edit.addEventListener("click", () => {
       hwEditing = h.id;
       titleIn.value = h.title; dueIn.value = h.due || "";
+      setHwEditing(true);
+      titleIn.focus();
     });
     del.addEventListener("click", () => {
       if (hwEditing === h.id) hwEditing = null;
@@ -1268,6 +1333,10 @@ function examsView() {
   const row2 = el("div", "row2"); row2.appendChild(typeIn); row2.appendChild(dateIn);
   const row3 = el("div", "row2"); row3.appendChild(timeIn); row3.appendChild(locIn);
   const saveBtn = el("button", "r-btn", examEditing ? "保存修改" : "添加考试");
+  const setExamEditing = (on) => {
+    form.classList.toggle("editing", !!on);
+    saveBtn.textContent = on ? "保存修改" : "添加考试";
+  };
   saveBtn.addEventListener("click", () => {
     if (!dateIn.value) { toast("请选择考试日期"); return; }
     if (examEditing) {
@@ -1278,6 +1347,8 @@ function examsView() {
       rec.exams.push({ id: uid(), type: typeIn.value, date: dateIn.value, time: timeIn.value, location: locIn.value.trim() });
     }
     saveState();
+    setExamEditing(false);
+    dateIn.value = ""; timeIn.value = ""; locIn.value = "";
     renderDrawer();
   });
   form.appendChild(row2);
@@ -1305,6 +1376,8 @@ function examsView() {
     edit.addEventListener("click", () => {
       examEditing = e.id;
       typeIn.value = e.type; dateIn.value = e.date; timeIn.value = e.time || ""; locIn.value = e.location || "";
+      setExamEditing(true);
+      dateIn.focus();
     });
     del.addEventListener("click", () => {
       if (examEditing === e.id) examEditing = null;
@@ -1335,12 +1408,17 @@ function showCodesModal() {
         <button class="cancel" id="codesCancel">取消</button>
       </div>
     </div>`);
-  $("codesOk").addEventListener("click", () => {
-    const raw = parseCodes($("codesText").value);
+  const ta = $("codesText");
+  bindAutoGrow(ta, 300);
+  ta.focus();
+  const submit = () => {
+    const raw = parseCodes(ta.value);
     if (!raw.length) { toast("没有有效的课程代码"); return; }
     hideModal();
     addCodes(raw);
-  });
+  };
+  $("codesOk").addEventListener("click", submit);
+  ctrlEnter(ta, submit);
   $("codesCancel").addEventListener("click", hideModal);
 }
 
@@ -1653,9 +1731,11 @@ async function loadForumPost(id) {
   }
   const form = el("div", "f-compose");
   const ta = el("textarea");
-  ta.placeholder = "写下你的回复…";
+  ta.placeholder = "写下你的回复…（Ctrl+Enter 发送）";
   const btn = el("button", "f-send", "回复");
-  btn.addEventListener("click", async () => {
+  bindAutoGrow(ta, 200);
+  attachCount(ta, 2000);
+  const send = async () => {
     const t = ta.value.trim();
     if (!t) { toast("回复不能为空"); return; }
     if (t.length > 2000) { toast("回复过长（≤2000 字）"); return; }
@@ -1671,7 +1751,9 @@ async function loadForumPost(id) {
       toast("发送失败：" + (e.message || e));
       btn.disabled = false; btn.textContent = "回复";
     }
-  });
+  };
+  btn.addEventListener("click", send);
+  ctrlEnter(ta, send);
   form.appendChild(ta);
   form.appendChild(btn);
   body.appendChild(form);
@@ -1691,16 +1773,25 @@ function composeForumPost() {
         <button class="cancel" id="fpCancel">取消</button>
       </div>
     </div>`);
-  $("fpOk").addEventListener("click", async () => {
-    const title = $("fpTitle").value.trim();
-    const content = $("fpContent").value.trim();
-    if (!title) { toast("请填写标题"); return; }
-    if (!content) { toast("请填写正文"); return; }
-    if (content.length > 4000) { toast("正文过长（≤4000 字）"); return; }
+  const title = $("fpTitle");
+  const content = $("fpContent");
+  attachCount(title, 80);
+  attachCount(content, 4000);
+  bindAutoGrow(content, 300);
+  title.focus();
+  title.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); content.focus(); }
+  });
+  const publish = async () => {
+    const t = title.value.trim();
+    const c = content.value.trim();
+    if (!t) { toast("请填写标题"); title.focus(); return; }
+    if (!c) { toast("请填写正文"); content.focus(); return; }
+    if (c.length > 4000) { toast("正文过长（≤4000 字）"); return; }
     $("fpOk").disabled = true;
     try {
       const { error } = await supabaseClient.from("forum_posts").insert({
-        user_id: authUser.id, author: authUser.email, title, content
+        user_id: authUser.id, author: authUser.email, title: t, content: c
       });
       if (error) throw error;
       hideModal();
@@ -1710,7 +1801,9 @@ function composeForumPost() {
       toast("发布失败：" + (e.message || e));
       $("fpOk").disabled = false;
     }
-  });
+  };
+  $("fpOk").addEventListener("click", publish);
+  ctrlEnter(content, publish);
   $("fpCancel").addEventListener("click", hideModal);
 }
 
@@ -1785,7 +1878,7 @@ async function loadCourseForum(code) {
   }
   const form = el("div", "f-compose");
   const ta = el("textarea");
-  ta.placeholder = "说点什么，或分享资料…（可只发文件）";
+  ta.placeholder = "说点什么，或分享资料…（可只发文件，Ctrl+Enter 发送）";
   const row = el("div", "f-compose-row");
   const attach = el("button", "r-btn ghost", "📎 附件");
   const fileIn = el("input");
@@ -1796,7 +1889,9 @@ async function loadCourseForum(code) {
     attach.textContent = f ? "📎 " + (f.name.length > 10 ? f.name.slice(0, 10) + "…" : f.name) : "📎 附件";
   });
   const btn = el("button", "f-send", "发送");
-  btn.addEventListener("click", async () => {
+  bindAutoGrow(ta, 200);
+  attachCount(ta, 2000);
+  const send = async () => {
     const text = ta.value.trim();
     const f = fileIn.files[0];
     if (!text && !f) { toast("写点内容或选择附件"); return; }
@@ -1823,7 +1918,9 @@ async function loadCourseForum(code) {
       toast("发送失败：" + (e.message || e));
       btn.disabled = false; attach.disabled = false; btn.textContent = "发送";
     }
-  });
+  };
+  btn.addEventListener("click", send);
+  ctrlEnter(ta, send);
   row.appendChild(attach);
   row.appendChild(btn);
   form.appendChild(ta);
@@ -1836,16 +1933,19 @@ async function loadCourseForum(code) {
 function init() {
   loadState();
   bindSearch($("searchInput"), $("suggestions"));
-  bindSearch($("welcomeSearch"), $("welcomeSug"), () => {
-    if (state.codes.length) showMain();
-  });
-
-  $("btnGenerate").addEventListener("click", () => {
+  const generate = () => {
     const raw = parseCodes($("codeInput").value);
     if (!raw.length) { toast("请先粘贴课程代码"); return; }
     addCodes(raw);
     if (state.codes.length) showMain();
+  };
+  bindSearch($("welcomeSearch"), $("welcomeSug"), () => {
+    if (state.codes.length) showMain();
   });
+
+  $("btnGenerate").addEventListener("click", generate);
+  bindAutoGrow($("codeInput"), 300);
+  ctrlEnter($("codeInput"), generate);
   $("btnShare").addEventListener("click", shareLink);
   $("btnLogin").addEventListener("click", showAuthModal);
   $("btnForum").addEventListener("click", () => showForum("list"));
