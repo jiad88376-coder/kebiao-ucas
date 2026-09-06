@@ -845,24 +845,33 @@ async function fillWeatherCard(strip, date, dd) {
       if (!H.time[i].startsWith(ds)) continue;
       const hh = Number(H.time[i].slice(11, 13));
       if (dd === 0 && hh < nowH) continue; // 今天只显示未过去的时段
-      const isNow = dd === 0 && hh === nowH;
+      const isNow = hh === nowH; // 任意天都标出当前小时
       const item = el("div", "wx-h" + (isNow ? " wx-now" : ""));
-      item.appendChild(el("span", "wx-t", isNow ? "现在" : hh + "时"));
+      item.appendChild(el("span", "wx-t", isNow && dd === 0 ? "现在" : hh + "时"));
       item.appendChild(el("span", "wx-i", wmoIcon(H.weather_code[i])));
       item.appendChild(el("span", "wx-d", Math.round(H.temperature_2m[i]) + "°"));
       const p = H.precipitation_probability ? H.precipitation_probability[i] : null;
       item.appendChild(el("span", "wx-p", p != null && p >= 20 ? "💧" + p + "%" : ""));
       strip.appendChild(item);
-      if (isNow) centerEl = item;                 // 今天: 当前小时居中
-      else if (dd > 0 && hh === 12) centerEl = item; // 未来日: 中午居中
+      if (isNow) centerEl = item;                    // 当前小时始终居中
+      else if (!centerEl && dd > 0 && hh === 12) centerEl = item; // 兜底: 未来日中午
     }
     if (!strip.children.length) {
       strip.appendChild(el("div", "wx-none", "暂无预报"));
     } else if (centerEl) {
-      /* 默认将目标小时滚动到条带中央 */
-      requestAnimationFrame(() => {
-        strip.scrollLeft = Math.max(0, centerEl.offsetLeft - (strip.clientWidth - centerEl.offsetWidth) / 2);
-      });
+      /* 双 rAF 确保布局就绪后再居中; scrollIntoView 失败退回手动计算 */
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        try {
+          centerEl.scrollIntoView({ inline: "center", block: "nearest" });
+        } catch (e) {
+          strip.scrollLeft = Math.max(0, centerEl.offsetLeft - (strip.clientWidth - centerEl.offsetWidth) / 2);
+        }
+        /* scrollIntoView 兜底校准（个别内核 block/inline 行为不一致） */
+        const want = centerEl.offsetLeft - (strip.clientWidth - centerEl.offsetWidth) / 2;
+        if (Math.abs(strip.scrollLeft - Math.max(0, want)) > 24) {
+          strip.scrollLeft = Math.max(0, want);
+        }
+      }));
     }
   } catch (e) {
     if (!strip.isConnected) return;
