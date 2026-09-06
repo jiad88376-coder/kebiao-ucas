@@ -192,8 +192,20 @@ function applyCloud(cloud) {
 }
 
 /* 登录后的数据合并：两端都有数据时按修改时间静默取舍（新的一方胜出），不再弹窗 */
-async function pullAndMerge() {
+/* 节流：10 分钟内重复打开不重复拉取（省函数调用额度）；force=true 跳过节流（登录/手动同步） */
+const SYNC_AT_KEY = "kebiao:syncat";
+const SYNC_MIN_MS = 10 * 60 * 1000;
+let lastSyncAt = 0;
+try { lastSyncAt = Number(localStorage.getItem(SYNC_AT_KEY)) || 0; } catch (e) {}
+function markSynced() {
+  lastSyncAt = Date.now();
+  try { localStorage.setItem(SYNC_AT_KEY, String(lastSyncAt)); } catch (e) {}
+}
+async function pullAndMerge(force) {
+  if (!supabaseClient || !authUser) return;
+  if (!force && Date.now() - lastSyncAt < SYNC_MIN_MS) return;
   const cloud = await pullFromCloud();
+  markSynced();
   const localHas = state.codes.length > 0;
   const cloudHas = !!(cloud && cloud.schedule && Array.isArray(cloud.schedule.codes) && cloud.schedule.codes.length);
   if (!cloudHas && !localHas) return;
@@ -280,7 +292,7 @@ function showAuthModal() {
       </div>`);
     $("authSync").addEventListener("click", async () => {
       hideModal();
-      await pullAndMerge();
+      await pullAndMerge(true);
       toast("同步完成");
     });
     $("authOut").addEventListener("click", async () => {
@@ -332,7 +344,7 @@ async function doPasswordLogin(emailEl, passEl, btnId = "authLogin") {
     updateAuthUI();
     hideModal();
     toast("登录成功，正在同步…");
-    await pullAndMerge();
+    await pullAndMerge(true);
   } catch (e) {
     const msg = e.message || e;
     toast(msg.includes("Invalid login") ? "邮箱或密码不正确" : "登录失败：" + msg);
@@ -403,13 +415,13 @@ function showAuthSignupUI(email) {
         updateAuthUI();
         hideModal();
         toast("注册成功，但密码设置失败：" + (perr.message || perr));
-        await pullAndMerge();
+        await pullAndMerge(true);
         return;
       }
       updateAuthUI();
       hideModal();
       toast("注册成功，正在同步…");
-      await pullAndMerge();
+      await pullAndMerge(true);
     } catch (e) {
       toast("注册失败：" + (e.message || e));
     }
@@ -1617,9 +1629,35 @@ function renderForum() {
 }
 
 /* ---- 自由论坛：列表 ---- */
+/* ---- 自由论坛：列表（SWR：5 分钟内用本地缓存秒显，完全省掉请求） ---- */
+const FORUM_CACHE_KEY = "kebiao:forum:v1";
+const FORUM_CACHE_MS = 5 * 60 * 1000;
+let forumListCache = null;
+function forumCacheGet() {
+  if (forumListCache && Date.now() - forumListCache.ts < FORUM_CACHE_MS) return forumListCache.posts;
+  try {
+    const c = JSON.parse(localStorage.getItem(FORUM_CACHE_KEY));
+    if (c && c.ts && Date.now() - c.ts < FORUM_CACHE_MS && Array.isArray(c.posts)) {
+      forumListCache = c;
+      return c.posts;
+    }
+  } catch (e) {}
+  return null;
+}
+function forumCacheSave(posts) {
+  forumListCache = { ts: Date.now(), posts: posts };
+  try { localStorage.setItem(FORUM_CACHE_KEY, JSON.stringify(forumListCache)); } catch (e) {}
+}
+function forumCacheClear() {
+  forumListCache = null;
+  try { localStorage.removeItem(FORUM_CACHE_KEY); } catch (e) {}
+}
+
 async function loadForumList() {
   const body = $("forumBody");
   if (!supabaseClient) { body.innerHTML = ""; body.appendChild(el("div", "f-empty", "云服务未就绪，请刷新页面后重试")); return; }
+  const cached = forumCacheGet();
+  if (cached) { renderForumPosts(cached); return; }
   body.appendChild(el("div", "f-loading", "加载中…"));
   let posts;
   try {
@@ -1629,10 +1667,18 @@ async function loadForumList() {
     if (error) throw error;
     posts = data || [];
   } catch (e) {
+    if (!body.isConnected) return;
     body.innerHTML = "";
     body.appendChild(el("div", "f-empty", "加载失败：" + (e.message || e)));
     return;
   }
+  forumCacheSave(posts);
+  renderForumPosts(posts);
+}
+
+function renderForumPosts(posts) {
+  const body = $("forumBody");
+  if (!body || !body.isConnected) return;
   body.innerHTML = "";
   if (!posts.length) {
     body.appendChild(el("div", "f-empty", "还没有帖子，点右上角「✚ 发帖」抢个沙发～"));
@@ -1663,6 +1709,7 @@ function delBtn(tip, doDelete, refresh) {
       const { error } = await doDelete();
       if (error) throw error;
       toast("已删除");
+      forumCacheClear();
       refresh();
     } catch (e) {
       toast("删除失败：" + (e.message || e));
@@ -1796,6 +1843,7 @@ function composeForumPost() {
       if (error) throw error;
       hideModal();
       toast("发布成功");
+      forumCacheClear();
       loadForumList();
     } catch (e) {
       toast("发布失败：" + (e.message || e));
