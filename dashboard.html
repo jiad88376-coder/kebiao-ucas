@@ -79,10 +79,9 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
   <section class="panel">
     <h2>线路状态（实时探测）</h2>
     <div class="cap">
-      <div class="c" id="srcNetlify"><b>Netlify 反代（主源）</b><span>探测中…</span></div>
-      <div class="c" id="srcEdgeone"><b>EdgeOne 边缘（备源）</b><span>探测中…</span></div>
+      <div class="c" id="srcNetlify"><b>Netlify 反代（唯一在线源）</b><span>探测中…</span></div>
     </div>
-    <p class="note">备源等待自定义域名（EdgeOne 免费默认域名仅 3 小时预览，被 401 拦截属预期）。主源故障时前端会自动切换到备源。</p>
+    <p class="note">免费额度 12.5 万次/月，同步节流 + 论坛缓存后可支撑约 5000 日活。前端已内置惰性故障切换框架，未来新增线路改一行配置即可接入。</p>
   </section>
   <section class="panel">
     <h2>承载水位（估算 · 免费额度）</h2>
@@ -209,11 +208,10 @@ function load() {
     });
 }
 
-/* 线路探测：两个反代源各发一次最小请求，显示健康与延迟 */
+/* 线路探测：反代源健康与延迟 */
 function probeSources() {
   var PROBES = [
-    { id: "srcNetlify", base: "https://kebiao-ucas.netlify.app", path: "/.netlify/functions/supabase", label: "Netlify 反代（主源）" },
-    { id: "srcEdgeone", base: "https://kebiao-ucas1.edgeone.dev", path: "/api/supabase", label: "EdgeOne 边缘（备源）" }
+    { id: "srcNetlify", base: "https://kebiao-ucas.netlify.app", path: "/.netlify/functions/supabase" }
   ];
   for (var i = 0; i < PROBES.length; i++) (function (p) {
     var t0 = Date.now();
@@ -223,7 +221,7 @@ function probeSources() {
         var ms = Date.now() - t0;
         box.querySelector("span").textContent = r.ok
           ? "🟢 健康 · " + ms + "ms"
-          : "🟠 异常 HTTP " + r.status + " · " + ms + "ms（备源等待自定义域名）";
+          : "🔴 异常 HTTP " + r.status + " · " + ms + "ms";
       })
       .catch(function () {
         box.querySelector("span").textContent = "🔴 不可达 · " + (Date.now() - t0) + "ms";
