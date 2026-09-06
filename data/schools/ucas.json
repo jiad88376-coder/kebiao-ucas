@@ -2,6 +2,7 @@
   "id": "ucas",
   "name": "中国科学院大学",
   "short": "国科大",
+  "minCodeLen": 8,
   "catalogUrl": "./data/schools/ucas-catalog.json",
   "term": "2026秋季学期",
   "semesterMonday": "2026-08-31",

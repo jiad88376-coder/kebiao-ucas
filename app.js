@@ -1,6 +1,6 @@
 /* ================================================================
- * 课表 · 国科大课程表 (kebiao-ucas)
- * 数据: data/catalog.json  |  个人数据: localStorage(仅本机)
+ * 课表 · 多校课程表 (kebiao)
+ * 学校配置: data/schools.json + data/schools/<id>.json  |  个人数据: localStorage(仅本机)
  * ================================================================ */
 'use strict';
 
@@ -24,12 +24,13 @@ function normalizeCode(raw) {
 }
 
 function parseCodes(text) {
+  const minLen = (SCHOOL && SCHOOL.minCodeLen) || 8;
   const parts = String(text || "").split(/[\s,，;；、]+/);
   const seen = new Set();
   const out = [];
   for (const p of parts) {
     const c = normalizeCode(p);
-    if (c && c.length >= 8 && !seen.has(c)) { seen.add(c); out.push(c); }
+    if (c && c.length >= minLen && !seen.has(c)) { seen.add(c); out.push(c); }
   }
   return out;
 }
@@ -122,12 +123,16 @@ function daysLeft(dateStr) {
   if (isNaN(d)) return null;
   return Math.ceil((d - new Date()) / 86400000);
 }
+/* 本地时区今天的 YYYY-MM-DD（toISOString 是 UTC，晚上会差一天） */
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
 
 /* ---------------- 应用状态 ---------------- */
 const STORE_KEY = "kebiao:ucas:v1";
 const LAST_MODIFIED_KEY = "kebiao:ucas:v1:mtime";
 const SCHOOL_KEY = "kebiao:school";
-const CATALOG_URL = "./data/catalog.json";
 let viewWeek = 1; // 启动时由 applySchoolConfig 按校历设置（null=全部周次）
 let viewDay = 0;  // 手机端默认聚焦今天(0=全周)；桌面端全周；同样在 applySchoolConfig 设置
 
@@ -520,6 +525,7 @@ function showWelcome() {
   $("welcome").classList.remove("hidden");
 }
 
+let bannerTimer = null;
 function showBanner(text, warn) {
   const b = $("banner");
   b.classList.toggle("warn", !!warn);
@@ -531,6 +537,8 @@ function showBanner(text, warn) {
   b.innerHTML = "";
   b.appendChild(ul);
   b.classList.remove("hidden");
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => b.classList.add("hidden"), 12000);
 }
 /* ---------------- 渲染：周课表 ---------------- */
 function curWeek() { return getSemesterWeek(new Date()); }
@@ -541,10 +549,6 @@ function render() {
   renderWeekbar();
   renderDayTabs();
   renderGrid();
-  const total = state.codes.reduce((s, c) => {
-    const x = courseMap[c];
-    return s + (x ? (x.credit || 0) : 0);
-  }, 0);
   $("termBadge").textContent = catalog && catalog.meta && catalog.meta.term
     ? catalog.meta.term : "";
 }
@@ -632,19 +636,39 @@ function renderGrid() {
   }
 
   /* 计算每节课的放置：起点(row,col) + 跨节 span；同格冲突则叠加 */
+  const maxP = Math.max.apply(null, Object.keys(PERIOD_TIMES).map(Number));
   const starts = {};   // "row-col" -> [{course, session, span}]
-  const covered = {};  // "row-col" -> true (被 rowspan 覆盖)
   const placed = new Set();
   for (const c of courses) {
     for (const s of c.sessions) {
-      if (!(s.day >= 1 && s.day <= 7 && s.p1 >= 1 && s.p2 >= s.p1 && s.p2 <= 13)) continue;
+      if (!(s.day >= 1 && s.day <= 7 && s.p1 >= 1 && s.p2 >= s.p1 && s.p2 <= maxP)) continue;
       const key = `${c.code}|${s.day}|${s.p1}|${s.p2}|${s.weeks}`;
       if (placed.has(key)) continue;
       placed.add(key);
       const span = s.p2 - s.p1 + 1;
       const sk = `${s.p1}-${s.day}`;
       (starts[sk] = starts[sk] || []).push({ course: c, session: s, span });
-      for (let r = s.p1; r < s.p1 + span; r++) covered[`${r}-${s.day}`] = true;
+    }
+  }
+  /* 列内防重叠：同一列后开始的块截断前面块的跨行数，避免表格错位 */
+  const colStarts = {};
+  for (const sk of Object.keys(starts)) {
+    const [p, d] = sk.split("-").map(Number);
+    (colStarts[d] = colStarts[d] || []).push({ p, items: starts[sk] });
+  }
+  for (const d of Object.keys(colStarts)) {
+    const arr = colStarts[d].sort((a, b) => a.p - b.p);
+    for (let i = 0; i < arr.length; i++) {
+      const end = i + 1 < arr.length ? arr[i + 1].p : maxP + 1;
+      const span = Math.max(1, Math.min(arr[i].items[0].span, end - arr[i].p));
+      for (const it of arr[i].items) it.span = span;
+    }
+  }
+  const covered = {};  // "row-col" -> true (被 rowspan 覆盖)
+  for (const sk of Object.keys(starts)) {
+    const d = sk.split("-")[1];
+    for (const it of starts[sk]) {
+      for (let r = it.session.p1; r < it.session.p1 + it.span; r++) covered[r + "-" + d] = true;
     }
   }
 
@@ -661,7 +685,7 @@ function renderGrid() {
   thead.appendChild(hr);
 
   const tbody = el("tbody");
-  for (let p = 1; p <= 13; p++) {
+  for (let p = 1; p <= maxP; p++) {
     const tr = el("tr");
     const tc = el("td", "time-col");
     tc.appendChild(el("div", "tp-num", String(p)));
@@ -686,7 +710,6 @@ function renderGrid() {
   }
 
   grid.innerHTML = "";
-  grid.classList.remove("single");
   grid.classList.remove("hidden");
   const dv = $("dayview");
   if (dv) dv.classList.add("hidden");
@@ -963,7 +986,7 @@ function notesView() {
   const form = el("div", "r-form");
   const row2 = el("div", "row2");
   const dateIn = el("input"); dateIn.type = "date";
-  dateIn.value = new Date().toISOString().slice(0, 10);
+  dateIn.value = todayStr();
   const titleIn = el("input"); titleIn.placeholder = "标题（如：第3周 希尔伯特空间）";
   row2.appendChild(dateIn);
   row2.appendChild(titleIn);
@@ -1270,6 +1293,7 @@ function showForum(mode, opts) {
   forumCtx = Object.assign({ mode: mode || "list" }, opts);
   $("welcome").classList.add("hidden");
   $("main").classList.add("hidden");
+  $("schoolPick").classList.add("hidden");
   $("forum").classList.remove("hidden");
   window.scrollTo(0, 0);
   renderForum();
@@ -1307,6 +1331,7 @@ function renderForum() {
 /* ---- 自由论坛：列表 ---- */
 async function loadForumList() {
   const body = $("forumBody");
+  if (!supabaseClient) { body.innerHTML = ""; body.appendChild(el("div", "f-empty", "云服务未就绪，请刷新页面后重试")); return; }
   body.appendChild(el("div", "f-loading", "加载中…"));
   let posts;
   try {
@@ -1373,6 +1398,7 @@ function loginBar(text) {
 /* ---- 自由论坛：帖子详情 ---- */
 async function loadForumPost(id) {
   const body = $("forumBody");
+  if (!supabaseClient) { body.innerHTML = ""; body.appendChild(el("div", "f-empty", "云服务未就绪，请刷新页面后重试")); return; }
   body.appendChild(el("div", "f-loading", "加载中…"));
   let post, replies;
   try {
@@ -1498,6 +1524,7 @@ async function downloadForumFile(p) {
 /* ---- 课程区：讨论与资料 ---- */
 async function loadCourseForum(code) {
   const body = $("forumBody");
+  if (!supabaseClient) { body.innerHTML = ""; body.appendChild(el("div", "f-empty", "云服务未就绪，请刷新页面后重试")); return; }
   body.appendChild(el("div", "f-loading", "加载中…"));
   let posts;
   try {
@@ -1674,15 +1701,12 @@ function init() {
 
 if (typeof document !== "undefined") {
   initSupabase();
-  if (supabaseClient) {
-    supabaseClient.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        authUser = data.session.user;
-        updateAuthUI();
-      }
-    });
-  }
-  boot();
+  const sessionReady = supabaseClient
+    ? supabaseClient.auth.getSession().then(({ data }) => {
+        if (data.session) { authUser = data.session.user; updateAuthUI(); }
+      }).catch(() => {})
+    : Promise.resolve();
+  boot(sessionReady);
 }
 
 /* ---------------- 学校选择与启动 ---------------- */
@@ -1694,6 +1718,7 @@ function applySchoolConfig(cfg) {
   CAMPUS_NAME = {};
   for (const c of (cfg.campuses || [])) CAMPUS_NAME[c.code] = c.name;
   SCHOOL_SECTIONS = cfg.sections || null;
+  if (cfg.name) document.title = "课表 · " + cfg.name;
   viewWeek = getSemesterWeek(new Date());
   viewDay = window.innerWidth <= 640 ? dayIndexOfToday() : 0;
 }
@@ -1751,8 +1776,9 @@ function chooseSchool(id) {
   loadSchoolAndStart(id);
 }
 
-async function boot() {
+async function boot(sessionReady) {
   try {
+    await sessionReady; /* 先等登录态就绪：避免已登录用户误见选校页/漏拉云端 */
     const res = await fetch("./data/schools.json");
     if (!res.ok) throw new Error(res.status);
     const registry = await res.json();
@@ -1781,13 +1807,19 @@ async function boot() {
 }
 
 async function legacyStart() {
+  /* 兜底：schools.json 不可用时，按内置默认配置(国科大)直接加载课程库 */
   try {
-    const r = await fetch(CATALOG_URL);
+    const r = await fetch("./data/schools/ucas-catalog.json");
     if (!r.ok) throw new Error(r.status);
     const data = await r.json();
     catalog = data;
     courseMap = {};
     for (const c of catalog.courses) courseMap[c.code] = c;
+    if (!SCHOOL) {
+      SCHOOL = { id: "ucas", name: "中国科学院大学", short: "国科大" };
+      viewWeek = getSemesterWeek(new Date());
+      viewDay = window.innerWidth <= 640 ? dayIndexOfToday() : 0;
+    }
     init();
     if (authUser) pullAndMerge();
     if ("serviceWorker" in navigator) {
