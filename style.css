@@ -472,6 +472,9 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
   .icon-btn { width: 36px; height: 33px; padding: 0; }
   .ib-ico { font-size: 15px; }
   .ib-label { display: none; }
+  /* 论坛按钮保持文字展开 */
+  .talk-btn { width: auto; padding: 0 9px; gap: 4px; }
+  .talk-btn .ib-label { display: inline; font-size: 12.5px; letter-spacing: .5px; }
   .brand-text { font-size: 14.5px; letter-spacing: .5px; }
   .term-badge { font-size: 9.5px; }
   .legend { font-size: 10px; gap: 6px; padding: 10px 2px 2px; }
