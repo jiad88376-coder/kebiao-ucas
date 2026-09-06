@@ -2075,6 +2075,7 @@ async function loadSchoolAndStart(sid) {
     for (const c of catalog.courses) courseMap[c.code] = c;
 
     init();
+    statsPing();
     if (authUser) pullAndMerge();
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").catch(() => {});
@@ -2112,6 +2113,23 @@ function chooseSchool(id) {
   try { localStorage.setItem(SCHOOL_KEY, id); } catch (e) {}
   $("schoolPick").classList.add("hidden");
   loadSchoolAndStart(id);
+}
+
+/* ---------------- 日活统计（零个人信息：随机设备ID + 会话去重 + 服务端按天聚合） ---------------- */
+const DID_KEY = "kebiao:did";
+function statsPing() {
+  if (!supabaseClient) return;
+  try {
+    if (sessionStorage.getItem("kebiao:pinged") === "1") return;
+    sessionStorage.setItem("kebiao:pinged", "1");
+    let did = null;
+    try { did = localStorage.getItem(DID_KEY); } catch (e) {}
+    if (!did) {
+      did = uid();
+      try { localStorage.setItem(DID_KEY, did); } catch (e) {}
+    }
+    supabaseClient.rpc("stats_ping", { p_device: did }).then(() => {}, () => {});
+  } catch (e) {}
 }
 
 async function boot(sessionReady) {
@@ -2159,6 +2177,7 @@ async function legacyStart() {
       viewDay = window.innerWidth <= 640 ? dayIndexOfToday() : 0;
     }
     init();
+    statsPing();
     if (authUser) pullAndMerge();
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").catch(() => {});
