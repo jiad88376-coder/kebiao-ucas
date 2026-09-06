@@ -370,8 +370,7 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
   #grid thead th { width: 88px; }
   #grid.single { min-width: 0; width: 100%; }
   #grid.single thead th { width: auto; }
-  #grid.single thead th.time-col, #grid.single td.time-col { width: 40px; }
-  #grid.single td.time-col .tp-time { display: none; }
+  #grid.single thead th.time-col, #grid.single td.time-col { width: 64px; }
 
   /* 顶栏紧凑化 */
   .topbar { padding: 8px 10px; }
