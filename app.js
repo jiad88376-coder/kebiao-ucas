@@ -746,6 +746,121 @@ const DAY_FREE_EGGS = ["🎉 今天全天没课！来一场说走就走的……
 
 function pickEgg(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
+/* ---------------- 逐小时天气（Open-Meteo, 免密钥; 按当天课程所在校区取坐标） ---------------- */
+const WX_CACHE_KEY = "kebiao:wx:v1";
+let wxMem = null;
+
+function wmoIcon(code) {
+  if (code === 0) return "☀️";
+  if (code === 1) return "🌤";
+  if (code === 2) return "⛅";
+  if (code === 3) return "☁️";
+  if (code === 45 || code === 48) return "🌫";
+  if (code >= 51 && code <= 57) return "🌦";
+  if (code >= 61 && code <= 67) return "🌧";
+  if (code >= 71 && code <= 77) return "🌨";
+  if (code >= 80 && code <= 82) return "🌦";
+  if (code === 85 || code === 86) return "🌨";
+  return "⛈";
+}
+
+function weatherCampus() {
+  const counts = {};
+  for (const code of state.codes) {
+    const c = courseMap[code];
+    if (c && c.campus) counts[c.campus] = (counts[c.campus] || 0) + 1;
+  }
+  let best = null, n = -1;
+  for (const k of Object.keys(counts)) if (counts[k] > n) { best = k; n = counts[k]; }
+  return best;
+}
+
+function weatherCoords() {
+  const geo = (SCHOOL && SCHOOL.campusGeo) || {};
+  const prefer = weatherCampus();
+  if (prefer && geo[prefer]) return [geo[prefer].lat, geo[prefer].lon];
+  const keys = Object.keys(geo);
+  return keys.length ? [geo[keys[0]].lat, geo[keys[0]].lon] : null;
+}
+
+async function getWeather(lat, lon) {
+  const now = Date.now();
+  let cache = wxMem;
+  if (!cache) { try { cache = JSON.parse(localStorage.getItem(WX_CACHE_KEY)); } catch (e) {} }
+  const match = cache && cache.lat === lat && cache.lon === lon && cache.data;
+  if (match && now - cache.ts < 30 * 60 * 1000) return cache.data; // 30 分钟内直接用
+  try {
+    const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon +
+      "&hourly=temperature_2m,weather_code,precipitation_probability&timezone=auto&forecast_days=7";
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    wxMem = cache = { lat, lon, ts: now, data };
+    try { localStorage.setItem(WX_CACHE_KEY, JSON.stringify(cache)); } catch (e) {}
+    return data;
+  } catch (e) {
+    if (match && now - cache.ts < 6 * 3600 * 1000) return cache.data; // 离线/接口故障: 6h 内缓存兜底
+    throw e;
+  }
+}
+
+/* 构建天气卡片（含异步填充）; 不在预报范围/无坐标时返回 null */
+function buildWeatherCard() {
+  const coords = weatherCoords();
+  if (!coords) return null;
+  const wxDate = new Date(weekMonday(viewWeek));
+  wxDate.setDate(wxDate.getDate() + viewDay - 1);
+  const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+  const dd = Math.round((wxDate - today0) / 86400000);
+  if (dd < 0 || dd > 6) return null;
+
+  const card = el("div", "day-sec day-wx");
+  const head = el("div", "day-sec-head");
+  head.appendChild(el("span", "day-sec-icon", "🌤"));
+  const tt = el("div", "day-sec-title");
+  tt.appendChild(el("span", "", dd === 0 ? "今日天气" : "当日天气"));
+  const cc = weatherCampus();
+  tt.appendChild(el("span", "day-sec-time", "逐小时" + (cc && CAMPUS_NAME[cc] ? " · " + CAMPUS_NAME[cc] : "")));
+  head.appendChild(tt);
+  card.appendChild(head);
+  const strip = el("div", "wx-strip");
+  strip.appendChild(el("div", "wx-none", "天气加载中…"));
+  card.appendChild(strip);
+  fillWeatherCard(strip, wxDate, dd);
+  return card;
+}
+
+async function fillWeatherCard(strip, date, dd) {
+  const coords = weatherCoords();
+  if (!coords) { strip.innerHTML = ""; strip.appendChild(el("div", "wx-none", "暂无天气数据")); return; }
+  try {
+    const data = await getWeather(coords[0], coords[1]);
+    if (!strip.isConnected) return; // 用户已切走视图
+    const H = data.hourly;
+    const ds = date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+    const nowH = new Date().getHours();
+    strip.innerHTML = "";
+    for (let i = 0; i < H.time.length; i++) {
+      if (!H.time[i].startsWith(ds)) continue;
+      const hh = Number(H.time[i].slice(11, 13));
+      if (dd === 0 && hh < nowH) continue; // 今天只显示未过去的时段
+      const isNow = dd === 0 && hh === nowH;
+      const item = el("div", "wx-h" + (isNow ? " wx-now" : ""));
+      item.appendChild(el("span", "wx-t", isNow ? "现在" : hh + "时"));
+      item.appendChild(el("span", "wx-i", wmoIcon(H.weather_code[i])));
+      item.appendChild(el("span", "wx-d", Math.round(H.temperature_2m[i]) + "°"));
+      const p = H.precipitation_probability ? H.precipitation_probability[i] : null;
+      item.appendChild(el("span", "wx-p", p != null && p >= 20 ? "💧" + p + "%" : ""));
+      strip.appendChild(item);
+    }
+    if (!strip.children.length) strip.appendChild(el("div", "wx-none", "暂无预报"));
+  } catch (e) {
+    if (!strip.isConnected) return;
+    strip.innerHTML = "";
+    strip.appendChild(el("div", "wx-none", "天气暂不可用"));
+  }
+}
+
 function renderDayView(courses) {
   const grid = $("grid");
   grid.classList.add("hidden");
@@ -786,6 +901,10 @@ function renderDayView(courses) {
       blocks.push({ course: s.course, p1: s.p1, p2: s.p2, room: s.room });
     }
   }
+
+  /* 天气卡片置顶（当天且在预报范围内才出现，空课日也显示） */
+  const wxCard = buildWeatherCard();
+  if (wxCard) host.appendChild(wxCard);
 
   /* 全天空课: 大彩蛋 */
   if (!blocks.length) {
