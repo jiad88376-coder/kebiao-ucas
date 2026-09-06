@@ -1388,15 +1388,8 @@ function copyShare(text, tip) {
   } else fallbackCopy(text, done);
 }
 
-function refTail() {
-  if (!authUser) return "";
-  const digits = String(authUser.email || "").split("@")[0].replace(/\D/g, "");
-  return digits.slice(-4) || String(authUser.id || "").slice(-4);
-}
-
 function shareLink() {
-  const tail = refTail();
-  const url = SHARE_URL + (tail ? "?ref=" + tail : "");
+  const url = SHARE_URL; /* 纯净链接: QQ/微信卡片缓存复用, 无需重新抓取 */
   const full = SHARE_TEXT + "\n👉 " + url;
   showModal(`
     <div class="modal-card">
