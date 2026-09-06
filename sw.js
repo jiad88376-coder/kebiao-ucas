@@ -1,5 +1,5 @@
 /* Service Worker: 离线缓存应用外壳 + 课程库 */
-const CACHE = "kebiao-ucas-v15";
+const CACHE = "kebiao-ucas-v16";
 const ASSETS = [
   "./",
   "./index.html",
@@ -7,7 +7,9 @@ const ASSETS = [
   "./app.js",
   "./vendor/supabase.min.js",
   "./manifest.json",
-  "./data/catalog.json",
+  "./data/schools.json",
+  "./data/schools/ucas.json",
+  "./data/schools/ucas-catalog.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/apple-touch-icon.png"

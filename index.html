@@ -38,6 +38,17 @@ try {
   </div>
 </header>
 
+<!-- 学校选择（新用户首次） -->
+<section id="schoolPick" class="hidden">
+  <h1>选择你的学校</h1>
+  <p class="hint">加载该校的课程库与校历，之后无需再选</p>
+  <div class="searchbox">
+    <input id="schoolSearch" placeholder="🔍 搜索学校…" autocomplete="off">
+  </div>
+  <div id="schoolList" class="school-list"></div>
+  <p class="footnote">没找到你的学校？联系管理员即可添加</p>
+</section>
+
 <!-- 空状态 / 欢迎页 -->
 <section id="welcome" class="welcome hidden">
   <h1>生成你的专属课表</h1>

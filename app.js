@@ -5,13 +5,16 @@
 'use strict';
 
 /* ---------------- 纯逻辑（可测试） ---------------- */
-const PERIOD_TIMES = {
+/* ---------------- 校级配置（默认=国科大；启动时被 data/schools/<id>.json 覆盖） ---------------- */
+let PERIOD_TIMES = {
   1: "8:30-9:15", 2: "9:20-10:05", 3: "10:25-11:10", 4: "11:15-12:00",
   5: "13:30-14:15", 6: "14:20-15:05", 7: "15:25-16:10", 8: "16:15-17:00",
   9: "17:05-17:50", 10: "18:30-19:15", 11: "19:20-20:05", 12: "20:15-21:00", 13: "21:05-21:50"
 };
 const DAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-const CAMPUS_NAME = { H: "怀柔", Y: "玉泉", Z: "中关村" };
+let CAMPUS_NAME = { H: "怀柔", Y: "玉泉", Z: "中关村" };
+let SCHOOL = null;          // 当前学校配置对象
+let SCHOOL_SECTIONS = null; // 该校 上午/下午/晚上 分段（可选配置）
 
 function normalizeCode(raw) {
   if (raw == null) return "";
@@ -82,8 +85,8 @@ function dayIndexOfToday() {
 }
 
 /* ---------------- 学期周次 ---------------- */
-const SEMESTER_MONDAY = "2026-08-31"; // 第 1 周周一
-const MAX_WEEK = 25;
+let SEMESTER_MONDAY = "2026-08-31"; // 第 1 周周一（校级配置可覆盖）
+let MAX_WEEK = 25;
 
 function parseYMD(s) {
   const [y, m, d] = String(s).split("-").map(Number);
@@ -123,10 +126,10 @@ function daysLeft(dateStr) {
 /* ---------------- 应用状态 ---------------- */
 const STORE_KEY = "kebiao:ucas:v1";
 const LAST_MODIFIED_KEY = "kebiao:ucas:v1:mtime";
+const SCHOOL_KEY = "kebiao:school";
 const CATALOG_URL = "./data/catalog.json";
-let viewWeek = getSemesterWeek(new Date()); // 默认显示本周；null=全部周次
-/* 手机端默认聚焦今天那一列(0=全周)；桌面端全周 */
-let viewDay = (typeof document !== "undefined" && window.innerWidth <= 640) ? dayIndexOfToday() : 0;
+let viewWeek = 1; // 启动时由 applySchoolConfig 按校历设置（null=全部周次）
+let viewDay = 0;  // 手机端默认聚焦今天(0=全周)；桌面端全周；同样在 applySchoolConfig 设置
 
 /* ---------------- 云同步 (Supabase, 经 Netlify Function 反代) ---------------- */
 /* 直连 *.supabase.co 在国内被 GFW 阻断，统一经 Netlify Function 转发。
@@ -508,10 +511,12 @@ function removeCourse(code) {
 /* ---------------- 渲染：主界面切换 ---------------- */
 function showMain() {
   $("welcome").classList.add("hidden");
+  $("schoolPick").classList.add("hidden");
   $("main").classList.remove("hidden");
 }
 function showWelcome() {
   $("main").classList.add("hidden");
+  $("schoolPick").classList.add("hidden");
   $("welcome").classList.remove("hidden");
 }
 
@@ -703,6 +708,9 @@ const DAY_SECTIONS = [
   { id: "pm", icon: "🌤", label: "下午", from: 5, to: 9, time: "13:30 – 17:50" },
   { id: "eve", icon: "🌙", label: "晚上", from: 10, to: 13, time: "18:30 – 21:50" }
 ];
+function activeSections() {
+  return (SCHOOL_SECTIONS && SCHOOL_SECTIONS.length) ? SCHOOL_SECTIONS : DAY_SECTIONS;
+}
 const DAY_EGGS = {
   am: ["上午没课，睡到自然醒 😴", "上午的空白，是赖床的许可 🛏️", "上午没课，去吃顿不慌不忙的早餐 🥣"],
   pm: ["下午没课，球场 / 图书馆 / 被窝三选一 🏸", "下午自由支配，来杯咖啡 ☕", "下午没课，去校园里走走 🍃"],
@@ -760,7 +768,7 @@ function renderDayView(courses) {
     return;
   }
 
-  for (const sec of DAY_SECTIONS) {
+  for (const sec of activeSections()) {
     const list = blocks.filter(b => b.p1 >= sec.from && b.p1 <= sec.to);
     const card = el("div", "day-sec");
     const head = el("div", "day-sec-head");
@@ -1186,7 +1194,7 @@ function fallbackCopy(text, done) {
 
 /* ---------------- 备份 / 恢复 ---------------- */
 function exportBackup() {
-  const data = { app: "kebiao-ucas", version: 1, exportedAt: new Date().toISOString(), codes: state.codes, records: state.records };
+  const data = { app: "kebiao-ucas", version: 1, exportedAt: new Date().toISOString(), school: SCHOOL ? SCHOOL.id : null, codes: state.codes, records: state.records };
   const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -1672,22 +1680,120 @@ if (typeof document !== "undefined") {
       }
     });
   }
-  fetch(CATALOG_URL)
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(data => {
-      catalog = data;
-      courseMap = {};
-      for (const c of catalog.courses) courseMap[c.code] = c;
-      init();
-      if (authUser) pullAndMerge();
-      if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js").catch(() => {});
+  boot();
+}
+
+/* ---------------- 学校选择与启动 ---------------- */
+function applySchoolConfig(cfg) {
+  SCHOOL = cfg;
+  if (cfg.periods) PERIOD_TIMES = cfg.periods;
+  if (cfg.semesterMonday) SEMESTER_MONDAY = cfg.semesterMonday;
+  if (cfg.maxWeek) MAX_WEEK = cfg.maxWeek;
+  CAMPUS_NAME = {};
+  for (const c of (cfg.campuses || [])) CAMPUS_NAME[c.code] = c.name;
+  SCHOOL_SECTIONS = cfg.sections || null;
+  viewWeek = getSemesterWeek(new Date());
+  viewDay = window.innerWidth <= 640 ? dayIndexOfToday() : 0;
+}
+
+async function loadSchoolAndStart(sid) {
+  try {
+    const cfgRes = await fetch("./data/schools/" + sid + ".json");
+    if (!cfgRes.ok) throw new Error(cfgRes.status);
+    const cfg = await cfgRes.json();
+    applySchoolConfig(cfg);
+
+    const catRes = await fetch(cfg.catalogUrl || ("./data/schools/" + sid + "-catalog.json"));
+    if (!catRes.ok) throw new Error(catRes.status);
+    const data = await catRes.json();
+    catalog = data;
+    courseMap = {};
+    for (const c of catalog.courses) courseMap[c.code] = c;
+
+    init();
+    if (authUser) pullAndMerge();
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    }
+  } catch (err) {
+    console.error("loadSchool", err);
+    toast("该校数据加载失败，请检查网络后刷新");
+  }
+}
+
+function showSchoolPicker(registry) {
+  $("welcome").classList.add("hidden");
+  $("main").classList.add("hidden");
+  $("schoolPick").classList.remove("hidden");
+  const list = $("schoolList");
+  const renderList = (kw) => {
+    list.innerHTML = "";
+    const k = String(kw || "").trim().toLowerCase();
+    for (const s of registry) {
+      if (k && !((s.name || "").toLowerCase().includes(k) || (s.short || "").toLowerCase().includes(k) || (s.id || "").includes(k))) continue;
+      const item = el("button", "school-item");
+      item.appendChild(el("span", "si-name", s.name));
+      if (s.short && s.short !== s.name) item.appendChild(el("span", "si-short", s.short));
+      item.addEventListener("click", () => chooseSchool(s.id));
+      list.appendChild(item);
+    }
+    if (!list.children.length) list.appendChild(el("div", "school-none", "未找到匹配的学校"));
+  };
+  renderList("");
+  $("schoolSearch").addEventListener("input", () => renderList($("schoolSearch").value));
+}
+
+function chooseSchool(id) {
+  try { localStorage.setItem(SCHOOL_KEY, id); } catch (e) {}
+  $("schoolPick").classList.add("hidden");
+  loadSchoolAndStart(id);
+}
+
+async function boot() {
+  try {
+    const res = await fetch("./data/schools.json");
+    if (!res.ok) throw new Error(res.status);
+    const registry = await res.json();
+
+    let sid = null;
+    try { sid = localStorage.getItem(SCHOOL_KEY); } catch (e) {}
+    if (!sid) {
+      /* 老用户（本地已有课表）或已登录用户 → 自动选默认学校(国科大)，不弹选择页 */
+      let hasLocal = false;
+      try { hasLocal = !!localStorage.getItem(STORE_KEY); } catch (e) {}
+      const def = registry.find(s => s.default) || registry[0];
+      if (hasLocal || authUser) {
+        if (def) {
+          sid = def.id;
+          try { localStorage.setItem(SCHOOL_KEY, sid); } catch (e) {}
+        }
       }
-    })
-    .catch(err => {
-      console.error(err);
-      toast("课程库加载失败，请检查网络后刷新");
-    });
+    }
+    if (sid) await loadSchoolAndStart(sid);
+    else showSchoolPicker(registry);
+  } catch (err) {
+    /* schools.json 不可用时兜底：走旧路径加载课程库 */
+    console.error("boot", err);
+    await legacyStart();
+  }
+}
+
+async function legacyStart() {
+  try {
+    const r = await fetch(CATALOG_URL);
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    catalog = data;
+    courseMap = {};
+    for (const c of catalog.courses) courseMap[c.code] = c;
+    init();
+    if (authUser) pullAndMerge();
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    }
+  } catch (e) {
+    toast("课程库加载失败，请检查网络后刷新");
+  }
 }
 
 /* 供 Node 单测 */

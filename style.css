@@ -482,6 +482,21 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .f-send:active { background: var(--primary-dark); }
 .f-send:disabled { opacity: .65; }
 
+/* ---------- 学校选择 ---------- */
+#schoolPick { max-width: 560px; margin: 0 auto; padding: 40px 20px 30px; text-align: center; }
+#schoolPick h1 { font-size: 22px; margin: 0 0 8px; }
+.school-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.school-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--card); cursor: pointer; font-size: 15px; color: var(--text);
+  text-align: left; width: 100%;
+}
+.school-item:active { background: #eef2fa; }
+[data-theme="dark"] .school-item:active { background: #242a3a; }
+.si-short { font-size: 12px; color: var(--muted); }
+.school-none { padding: 18px; color: var(--muted); font-size: 13px; }
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed; left: 50%; bottom: 46px; transform: translateX(-50%); z-index: 80;

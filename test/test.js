@@ -41,7 +41,7 @@ ok(app.sessionOverlap(s7, s8) === false, "周六5-7(2-3,7-12周) vs 周六5-8(�
 ok(app.sessionOverlap(s1, s3) === false, "周五5-7 vs 周五1-3 不冲突");
 
 console.log("== 真实课程库回归 ==");
-const cat = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "catalog.json"), "utf-8"));
+const cat = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "schools", "ucas-catalog.json"), "utf-8"));
 const map = {};
 for (const c of cat.courses) map[c.code] = c;
 const userCodes = ["180081070200P1003H","180081070202P3007H","180081070206P3008H","180201070402P2003H",
