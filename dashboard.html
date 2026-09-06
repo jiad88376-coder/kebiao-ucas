@@ -77,16 +77,24 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
     <div class="legend"><span><i class="bar-o"></i>打开次数</span><span><i class="bar-d"></i>独立设备</span></div>
   </section>
   <section class="panel">
+    <h2>线路状态（实时探测）</h2>
+    <div class="cap">
+      <div class="c" id="srcNetlify"><b>Netlify 反代（主源）</b><span>探测中…</span></div>
+      <div class="c" id="srcEdgeone"><b>EdgeOne 边缘（备源）</b><span>探测中…</span></div>
+    </div>
+    <p class="note">备源等待自定义域名（EdgeOne 免费默认域名仅 3 小时预览，被 401 拦截属预期）。主源故障时前端会自动切换到备源。</p>
+  </section>
+  <section class="panel">
     <h2>承载水位（估算 · 免费额度）</h2>
     <div id="meters"></div>
-    <p class="note">估算口径：每次打开 ≈ 2 次函数调用、≈ 1.5MB 静态流量（首访大、回访小，取中值）。Supabase 数据库/存储目前仅几百 KB，≈0%，暂不画条。</p>
+    <p class="note">估算口径：每次打开 ≈ 1.5 次函数调用（15 分钟同步节流 + 论坛缓存后；改动课表/笔记才额外推送）。Supabase 数据库/存储目前仅几百 KB，≈0%，暂不画条。</p>
   </section>
   <section class="panel">
     <h2>容量参照（免费额度）</h2>
     <div class="cap">
       <div class="c"><b>GitHub Pages</b><span>带宽约 100GB/月 · 静态资源，数千日活无压力</span></div>
       <div class="c"><b>Supabase</b><span>数据库 500MB · 存储 1GB · 出流量 5GB/月 · Auth 5 万月活</span></div>
-      <div class="c"><b>Netlify Functions</b><span>12.5 万次调用/月 · 论坛瓶颈 ≈ 日活 400</span></div>
+      <div class="c"><b>Netlify Functions</b><span>12.5 万次/月 · 同步节流+缓存后 ≈ 日活 5000</span></div>
     </div>
     <p class="note">口径说明：打开次数 = 每次进入网站 +1（会话内去重）；独立设备 = 当天去重后的随机设备 ID 数。连续多日 >100 时建议升级方案。</p>
   </section>
@@ -137,8 +145,8 @@ function render(rows, usersN) {
     card(yest.opens, "昨日打开") + card((sum7 / wk.length).toFixed(1), "7日日均打开") +
     card(sum30, "30天累计打开");
   document.getElementById("meters").innerHTML =
-    meter("Netlify 函数 · 今日", today.opens * 2, CAP.funcDay, "次") +
-    meter("Netlify 函数 · 本月", sum30 * 2, CAP.funcMonth, "次") +
+    meter("Netlify 函数 · 今日", today.opens * 1.5, CAP.funcDay, "次") +
+    meter("Netlify 函数 · 本月", sum30 * 1.5, CAP.funcMonth, "次") +
     meter("GitHub Pages 带宽 · 本月", sum30 * 1.5, CAP.pagesMonthMB, "MB");
   drawChart(rows.slice(0, 30).reverse());
   var live = document.getElementById("live");
@@ -192,12 +200,35 @@ function load() {
           render(rows, n);
         })
         .catch(function () { render(rows, null); });
+      probeSources();
     })
     .catch(function (e) {
       document.getElementById("live").textContent = "🔴 无法连接数据源";
       document.getElementById("live").className = "live old";
       document.getElementById("errbox").innerHTML = '<div class="err">数据加载失败：' + (e.message || e) + '</div>';
     });
+}
+
+/* 线路探测：两个反代源各发一次最小请求，显示健康与延迟 */
+function probeSources() {
+  var PROBES = [
+    { id: "srcNetlify", base: "https://kebiao-ucas.netlify.app", path: "/.netlify/functions/supabase", label: "Netlify 反代（主源）" },
+    { id: "srcEdgeone", base: "https://kebiao-ucas1.edgeone.dev", path: "/api/supabase", label: "EdgeOne 边缘（备源）" }
+  ];
+  for (var i = 0; i < PROBES.length; i++) (function (p) {
+    var t0 = Date.now();
+    var box = document.getElementById(p.id);
+    fetch(p.base + p.path + "/rest/v1/site_stats?select=day&limit=1", { headers: { apikey: API_KEY } })
+      .then(function (r) {
+        var ms = Date.now() - t0;
+        box.querySelector("span").textContent = r.ok
+          ? "🟢 健康 · " + ms + "ms"
+          : "🟠 异常 HTTP " + r.status + " · " + ms + "ms（备源等待自定义域名）";
+      })
+      .catch(function () {
+        box.querySelector("span").textContent = "🔴 不可达 · " + (Date.now() - t0) + "ms";
+      });
+  })(PROBES[i]);
 }
 document.getElementById("refresh").addEventListener("click", load);
 load();
