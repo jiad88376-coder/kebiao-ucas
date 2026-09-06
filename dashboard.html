@@ -127,9 +127,10 @@ function fmtNum(n) {
   return Math.round(n);
 }
 
-function beijingToday() {
-  return new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+function beijingDate(off) {
+  return new Date(Date.now() + 8 * 3600e3 + (off || 0) * 86400e3).toISOString().slice(0, 10);
 }
+function beijingToday() { return beijingDate(0); }
 
 function render(rows, usersN) {
   var box = document.getElementById("errbox");
@@ -139,8 +140,14 @@ function render(rows, usersN) {
     document.getElementById("chart").innerHTML = "";
     return;
   }
-  var today = rows[0];
-  var yest = rows[1] || { opens: 0, devices: 0 };
+  /* 按北京日期精确取"今日/昨日"行；当天行尚不存在（还没人打开）时记 0 */
+  var tk = beijingToday(), yk = beijingDate(-1);
+  var today = { day: tk, opens: 0, devices: 0 }, yest = { opens: 0, devices: 0 };
+  var hasToday = false;
+  for (var r = 0; r < rows.length; r++) {
+    if (rows[r].day === tk) { today = rows[r]; hasToday = true; }
+    if (rows[r].day === yk) yest = rows[r];
+  }
   var wk = rows.slice(0, 7), sum7 = 0;
   for (var i = 0; i < wk.length; i++) sum7 += wk[i].opens;
   var sum30 = 0;
@@ -156,11 +163,11 @@ function render(rows, usersN) {
     meter("GitHub Pages 带宽 · 本月", sum30 * 1.5, CAP.pagesMonthMB, "MB");
   drawChart(rows.slice(0, 30).reverse());
   var live = document.getElementById("live");
-  if (today.day === beijingToday()) {
+  if (hasToday) {
     live.textContent = "🟢 实时 · " + new Date().toTimeString().slice(0, 5) + " 更新";
     live.className = "live ok";
   } else {
-    live.textContent = "🟠 数据截至 " + today.day;
+    live.textContent = "🟠 今日暂无数据（有人打开后即生成）· 截至 " + rows[0].day;
     live.className = "live old";
   }
 }
