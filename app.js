@@ -1644,6 +1644,7 @@ function fmtSize(n) {
 }
 
 function showForum(mode, opts) {
+  if (!authUser) { promptLogin("登录后才能浏览论坛"); return; }
   opts = opts || {};
   forumCtx = Object.assign({ mode: mode || "list" }, opts);
   $("welcome").classList.add("hidden");
@@ -2085,7 +2086,10 @@ function init() {
   ctrlEnter($("codeInput"), generate);
   $("btnShare").addEventListener("click", shareLink);
   $("btnLogin").addEventListener("click", showAuthModal);
-  $("btnForum").addEventListener("click", () => showForum("list"));
+  $("btnForum").addEventListener("click", () => {
+    if (!authUser) { promptLogin("登录后才能浏览论坛"); return; }
+    showForum("list");
+  });
   $("btnMore").addEventListener("click", showMoreMenu);
   $("btnTheme").addEventListener("click", cycleTheme);
   applyTheme(themePref());
