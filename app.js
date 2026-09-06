@@ -247,9 +247,9 @@ function applyCloud(cloud) {
 }
 
 /* 登录后的数据合并：两端都有数据时按修改时间静默取舍（新的一方胜出），不再弹窗 */
-/* 节流：15 分钟内重复打开不重复拉取（省函数调用额度）；force=true 跳过节流（登录/手动同步） */
+/* 节流：课表一学期基本不变，24 小时只拉取一次（当天再打开零请求）；force=true 跳过节流（登录/手动同步） */
 const SYNC_AT_KEY = "kebiao:syncat";
-const SYNC_MIN_MS = 15 * 60 * 1000;
+const SYNC_MIN_MS = 24 * 60 * 60 * 1000;
 let lastSyncAt = 0;
 try { lastSyncAt = Number(localStorage.getItem(SYNC_AT_KEY)) || 0; } catch (e) {}
 function markSynced() {
