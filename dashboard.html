@@ -132,7 +132,10 @@ function beijingDate(off) {
 }
 function beijingToday() { return beijingDate(0); }
 
-function render(rows, usersN) {
+function render(rows, s) {
+  var uN = s ? (s.confirmed != null ? s.confirmed : s.users) : null;
+  var uToday = s && s.users_today != null ? s.users_today : null;
+  var conv = (s && s.confirmed != null && s.devices_total) ? (s.confirmed / s.devices_total * 100).toFixed(1) + "%" : null;
   var box = document.getElementById("errbox");
   box.innerHTML = "";
   if (!Array.isArray(rows) || !rows.length) {
@@ -154,7 +157,9 @@ function render(rows, usersN) {
   for (var j = 0; j < Math.min(rows.length, 30); j++) sum30 += rows[j].opens;
   document.getElementById("cards").innerHTML =
     card(today.opens, "今日打开", true) + card(today.devices, "今日日活") +
-    card(usersN == null ? "—" : usersN, "已注册(已验证)") +
+    card(uN == null ? "—" : uN, "已注册(已验证)") +
+    card(uToday == null ? "—" : uToday, "今日新增注册") +
+    card(conv == null ? "—" : conv, "注册转化率") +
     card(yest.opens, "昨日打开") + card((sum7 / wk.length).toFixed(1), "7日日均打开") +
     card(sum30, "30天累计打开");
   document.getElementById("meters").innerHTML =
@@ -209,8 +214,7 @@ function load() {
       fetch(RPC_SUM, { headers: { apikey: API_KEY } })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (s) {
-          var n = s && s[0] ? (s[0].confirmed != null ? s[0].confirmed : s[0].users) : null;
-          render(rows, n);
+          render(rows, s && s[0] ? s[0] : null);
         })
         .catch(function () { render(rows, null); });
       probeSources();
