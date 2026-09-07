@@ -521,6 +521,21 @@ function recordsOf(code) {
   return state.records[code];
 }
 
+/* 个人课表微调：按"星期+节次"覆盖地点/教师（只影响自己，随 records 云同步） */
+function sessKey(s) { return s.day + "-" + s.p1 + "-" + s.p2; }
+function tweakOf(code, s) {
+  const rec = state.records[code];
+  return rec && rec.tweaks ? rec.tweaks[sessKey(s)] : null;
+}
+function effRoom(course, s) {
+  const tw = tweakOf(course.code, s);
+  return (tw && tw.room) || s.room;
+}
+function effTeacher(course, s) {
+  const tw = tweakOf(course.code, s);
+  return (tw && tw.teacher) || course.teacher;
+}
+
 /* ---------------- DOM 工具 ---------------- */
 const $ = (id) => document.getElementById(id);
 function el(tag, cls, text) {
@@ -536,7 +551,12 @@ function toast(msg, ms = 2200) {
   clearTimeout(toast._t);
   toast._t = setTimeout(() => t.classList.remove("show"), ms);
 }
-function showModal(html) { $("modal").innerHTML = html; $("modal").classList.remove("hidden"); }
+function showModal(htmlOrNode) {
+  const m = $("modal");
+  if (typeof htmlOrNode === "string") m.innerHTML = htmlOrNode;
+  else { m.innerHTML = ""; m.appendChild(htmlOrNode); }
+  m.classList.remove("hidden");
+}
 function hideModal() { $("modal").classList.add("hidden"); }
 
 /* ---------------- 输入体验工具 ---------------- */
@@ -1049,7 +1069,7 @@ function renderDayView(courses) {
       const key = c.code + "|" + s.p1 + "|" + s.p2 + "|" + s.weeks;
       if (placed.has(key)) continue;
       placed.add(key);
-      sess.push({ course: c, p1: s.p1, p2: s.p2, room: s.room });
+      sess.push({ course: c, p1: s.p1, p2: s.p2, room: effRoom(c, s), teacher: effTeacher(c, s), tw: !!tweakOf(c.code, s) });
     }
   }
   sess.sort((a, b) => a.p1 - b.p1 || a.p2 - b.p2);
@@ -1097,7 +1117,7 @@ function renderDayView(courses) {
         const t1 = (PERIOD_TIMES[b.p1] || "").split("-")[0];
         const t2 = (PERIOD_TIMES[b.p2] || "").split("-")[1];
         blk.appendChild(el("div", "db-time", "第" + b.p1 + (b.p2 > b.p1 ? "-" + b.p2 : "") + "节 · " + t1 + " – " + t2));
-        const meta = [b.course.teacher, b.room].filter(Boolean).join(" · ");
+        const meta = [b.teacher, b.room].filter(Boolean).join(" · ") + (b.tw ? " ✎" : "");
         if (meta) blk.appendChild(el("div", "cc-meta", meta));
         blk.addEventListener("click", () => openDrawer(b.course.code));
         card.appendChild(blk);
@@ -1112,10 +1132,13 @@ function buildCourseBlock(course, session, conflictSess, weekView) {
   const isConflict = conflictSess.has(`${session.day}-${session.p1}-${session.p2}`);
   const block = el("div", "course-cell " + attrClass(course.attr) + (isConflict ? " conflict" : ""));
   block.appendChild(el("div", "cc-name", course.name));
+  const tw = tweakOf(course.code, session);
   const meta = [];
-  if (course.teacher) meta.push(course.teacher);
-  if (session.room) meta.push(session.room);
-  if (meta.length) block.appendChild(el("div", "cc-meta", meta.join(" · ")));
+  const teacher = effTeacher(course, session);
+  const room = effRoom(course, session);
+  if (teacher) meta.push(teacher);
+  if (room) meta.push(room);
+  if (meta.length) block.appendChild(el("div", "cc-meta", meta.join(" · ") + (tw ? " ✎" : "")));
   if (!weekView) block.appendChild(el("div", "cc-weeks", session.weeks));
   if (isConflict) block.appendChild(el("span", "cc-conflict-tag", "冲突"));
   return block;
@@ -1250,6 +1273,13 @@ function renderDrawer() {
   if (drawerTab === "exams") body.appendChild(examsView());
   d.appendChild(body);
 
+  const tweakBtn = el("button", "r-btn ghost", "📍 调整上课信息");
+  tweakBtn.addEventListener("click", () => {
+    closeDrawer();
+    showTweakModal(c.code);
+  });
+  d.appendChild(tweakBtn);
+
   const forumBtn = el("button", "r-btn ghost", "💬 去讨论区提问");
   forumBtn.addEventListener("click", () => {
     closeDrawer();
@@ -1270,6 +1300,85 @@ function kv(k, v) {
 }
 
 /* ---------------- 笔记 ---------------- */
+/* 调整上课信息：按节次覆盖地点/教师，仅存自己的 records（他人不受影响，随云同步） */
+function showTweakModal(code) {
+  const c = courseMap[code];
+  if (!c) return;
+  const seen = new Set();
+  const slots = [];
+  for (const s of (c.sessions || [])) {
+    const k = sessKey(s);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    slots.push(s);
+  }
+  const modalCard = el("div", "modal-card");
+  modalCard.appendChild(el("h3", "", "📍 调整上课信息"));
+  modalCard.appendChild(el("p", "share-hint", "仅修改你课表里的显示（如教室临时调整），全学期按节次生效，不影响任何人。"));
+  const list = el("div", "tk-list");
+  for (const s of slots) {
+    const tw = tweakOf(code, s);
+    const row = el("div", "tk-row");
+    row.appendChild(el("span", "tk-slot", DAY_NAMES[s.day - 1] + " 第" + s.p1 + (s.p2 > s.p1 ? "-" + s.p2 : "") + "节"));
+    row.appendChild(el("span", "tk-room", (effRoom(c, s) || "（无地点）") + (tw ? " ✎" : "")));
+    const b = el("button", "r-btn small", "修改");
+    b.addEventListener("click", () => editTweakSlot(code, s));
+    row.appendChild(b);
+    list.appendChild(row);
+  }
+  modalCard.appendChild(list);
+  const actions = el("div", "modal-actions");
+  const close = el("button", "cancel", "关闭");
+  close.addEventListener("click", hideModal);
+  actions.appendChild(close);
+  modalCard.appendChild(actions);
+  showModal(modalCard);
+}
+function editTweakSlot(code, s) {
+  const c = courseMap[code];
+  const tw = tweakOf(code, s) || {};
+  showModal(`
+    <div class="modal-card">
+      <h3>${DAY_NAMES[s.day - 1]} 第${s.p1}${s.p2 > s.p1 ? "-" + s.p2 : ""}节</h3>
+      <div class="r-form">
+        <input id="twRoom" maxlength="30" placeholder="上课地点（如：教一楼 302）">
+        <input id="twTeacher" maxlength="30" placeholder="教师（可选，留空用默认）">
+      </div>
+      <div class="modal-actions">
+        <button class="ok" id="twSave">保存</button>
+        <button class="cancel" id="twReset">恢复默认</button>
+        <button class="cancel" id="twCancel">取消</button>
+      </div>
+    </div>`);
+  $("twRoom").value = tw.room || "";
+  $("twTeacher").value = tw.teacher || "";
+  $("twSave").addEventListener("click", () => {
+    const room = $("twRoom").value.trim();
+    const teacher = $("twTeacher").value.trim();
+    const rec = recordsOf(code);
+    if (!rec.tweaks) rec.tweaks = {};
+    const k = sessKey(s);
+    const same = room === (s.room || "") && teacher === (c.teacher || "");
+    if (same) delete rec.tweaks[k];
+    else rec.tweaks[k] = Object.assign({}, room ? { room } : {}, teacher ? { teacher } : {});
+    saveState();
+    hideModal();
+    render();
+    toast(same ? "已恢复该节默认信息" : "已保存，仅自己可见");
+    showTweakModal(code);
+  });
+  $("twReset").addEventListener("click", () => {
+    const rec = recordsOf(code);
+    if (rec.tweaks) delete rec.tweaks[sessKey(s)];
+    saveState();
+    hideModal();
+    render();
+    toast("已恢复默认");
+    showTweakModal(code);
+  });
+  $("twCancel").addEventListener("click", hideModal);
+}
+
 /* 笔记图片：浏览器本地 canvas 压缩（长边<=1024, JPEG 75%），零网络调用 */
 function compressImage(file) {
   return new Promise((resolve, reject) => {
