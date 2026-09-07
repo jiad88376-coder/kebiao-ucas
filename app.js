@@ -1841,7 +1841,6 @@ function showMoreMenu() {
       <div class="menu-list">
         <button class="menu-item" id="mmSync"><span class="mi-ico">☁</span><span>立即云备份</span></button>
         <button class="menu-item" id="mmInstall"><span class="mi-ico">📲</span><span>安装成手机 App</span></button>
-        <button class="menu-item" id="mmFiles"><span class="mi-ico">📎</span><span>资料共享</span></button>
         <button class="menu-item" id="mmCodes"><span class="mi-ico">⌨️</span><span>粘贴课程代码</span></button>
         <button class="menu-item" id="mmBackup"><span class="mi-ico">⤓</span><span>备份与恢复</span></button>
       </div>
@@ -1851,7 +1850,6 @@ function showMoreMenu() {
     hideModal();
     showInstallGuide();
   });
-  $("mmFiles").addEventListener("click", () => { hideModal(); showForum("files"); });
   $("mmSync").addEventListener("click", () => {
     hideModal();
     if (!supabaseClient) { toast("云服务未就绪"); return; }
@@ -1881,65 +1879,7 @@ function showCloudPitch() {
   $("cpLogin").addEventListener("click", () => showAuthModal());
 }
 
-/* ---------------- 资料共享区（文件上传/下载独立模块，与论坛帖子共用存储与权限） ---------------- */
-async function loadFiles() {
-  const body = $("forumBody");
-  if (!supabaseClient) { body.innerHTML = ""; body.appendChild(el("div", "f-empty", "云服务未就绪，请刷新页面后重试")); return; }
-  body.innerHTML = "";
-  body.appendChild(el("div", "f-tip", "课件 / 资料共享 · 单文件 ≤ 5MB · 请勿上传侵权或违规内容，违规将被移除"));
-  if (forumCtx.course) {
-    const bar = el("div", "f-tip");
-    bar.appendChild(el("span", "", "只看该课程的资料 · "));
-    const all = el("button", "f-linkbtn", "查看全部");
-    all.addEventListener("click", () => showForum("files"));
-    bar.appendChild(all);
-    body.appendChild(bar);
-  }
-  body.appendChild(el("div", "f-loading", "加载中…"));
-  let posts;
-  try {
-    let q = supabaseClient.from("forum_posts")
-      .select("id,user_id,author,title,created_at,course_code,file_name,file_size")
-      .not("file_path", "is", null)
-      .eq("is_deleted", false);
-    if (forumCtx.course) q = q.eq("course_code", forumCtx.course);
-    const { data, error } = await q.order("created_at", { ascending: false }).limit(100);
-    if (error) throw error;
-    posts = data || [];
-  } catch (e) {
-    if (!body.isConnected) return;
-    body.innerHTML = "";
-    body.appendChild(el("div", "f-empty", "加载失败：" + (e.message || e)));
-    return;
-  }
-  if (!posts.length) {
-    body.appendChild(el("div", "f-empty", "还没有资料，点右上角「✚ 上传」分享第一份吧"));
-    return;
-  }
-  for (const p of posts) {
-    const card = el("div", "f-card f-main");
-    const row = el("div", "f-file f-file-btn");
-    row.appendChild(el("span", "", "📎"));
-    row.appendChild(el("span", "f-file-name", p.file_name || "附件"));
-    row.appendChild(el("span", "f-file-size", p.file_size ? " · " + fmtSize(p.file_size) : ""));
-    row.addEventListener("click", () => downloadForumFile(p));
-    card.appendChild(row);
-    const meta = el("div", "f-meta");
-    meta.appendChild(el("span", "", authorShort(p.author)));
-    meta.appendChild(el("span", "", fmtTime(p.created_at)));
-    if (p.course_code && courseMap[p.course_code]) {
-      const tag = el("span", "f-tag", courseMap[p.course_code].name);
-      tag.title = courseMap[p.course_code].name;
-      tag.addEventListener("click", () => showForum("files", { course: p.course_code }));
-      meta.appendChild(tag);
-    }
-    if (mine(p.user_id)) meta.appendChild(delBtn("删除这份资料？", () =>
-      supabaseClient.from("forum_posts").delete().eq("id", p.id), () => loadFiles()));
-    card.appendChild(meta);
-    body.appendChild(card);
-  }
-}
-
+/* ---------------- 上传资料 ---------------- */
 function filesUploadModal() {
   showModal(`
     <div class="modal-card">
@@ -2000,7 +1940,8 @@ function filesUploadModal() {
       hideModal();
       toast("资料已上传 📎");
       forumCacheClear();
-      loadFiles();
+      forumCtx.filesOnly = true;
+      loadForumList();
     } catch (e) {
       toast("上传失败：" + (e.message || e));
       ok.disabled = false; ok.textContent = "上传";
@@ -2214,7 +2155,7 @@ function showForum(mode, opts) {
   if (!authUser) { promptLogin("登录后才能浏览论坛"); return; }
   clearReplyBadge(); /* 进论坛即视为已查看，红点消失 */
   opts = opts || {};
-  forumCtx = Object.assign({ mode: mode || "list" }, opts);
+  forumCtx = Object.assign({ mode: mode || "list", filesOnly: false }, opts);
   $("welcome").classList.add("hidden");
   $("main").classList.add("hidden");
   $("schoolPick").classList.add("hidden");
@@ -2236,7 +2177,6 @@ function renderForum() {
   head.appendChild(back);
   let title = "自由论坛";
   if (forumCtx.mode === "post") title = "帖子详情";
-  if (forumCtx.mode === "files") title = "📎 资料共享";
   if (forumCtx.mode === "list" && forumCtx.course) {
     title = "🏷 " + ((courseMap[forumCtx.course] || {}).name || forumCtx.course);
   }
@@ -2248,19 +2188,16 @@ function renderForum() {
       composeForumPost(forumCtx.course || null);
     });
     head.appendChild(nb);
-  }
-  if (forumCtx.mode === "files") {
-    const nb = el("button", "fb-new", "✚ 上传");
-    nb.addEventListener("click", () => {
+    const ub = el("button", "fb-new", "📎 上传");
+    ub.addEventListener("click", () => {
       if (!authUser) { promptLogin("登录后才能上传资料"); return; }
       filesUploadModal();
     });
-    head.appendChild(nb);
+    head.appendChild(ub);
   }
   $("forumBody").innerHTML = "";
   if (forumCtx.mode === "list") loadForumList();
   if (forumCtx.mode === "post") loadForumPost(forumCtx.postId);
-  if (forumCtx.mode === "files") loadFiles();
 }
 
 /* ---- 自由论坛：列表 ---- */
@@ -2298,7 +2235,7 @@ async function loadForumList() {
   let posts;
   try {
     const { data, error } = await supabaseClient.from("forum_posts")
-      .select("id,user_id,author,title,content,created_at,course_code,file_name,file_size")
+      .select("id,user_id,author,title,content,created_at,course_code,file_path,file_name,file_size")
       .eq("is_deleted", false).order("created_at", { ascending: false }).limit(100);
     if (error) throw error;
     posts = data || [];
@@ -2316,8 +2253,20 @@ function renderForumPosts(posts) {
   const body = $("forumBody");
   if (!body || !body.isConnected) return;
   body.innerHTML = "";
+  /* 类型筛选片：全部 / 含资料 */
+  if (!forumCtx.course) {
+    const chips = el("div", "f-chips");
+    const bAll = el("button", "f-chip" + (forumCtx.filesOnly ? "" : " on"), "全部帖子");
+    bAll.addEventListener("click", () => { forumCtx.filesOnly = false; loadForumList(); });
+    const bFiles = el("button", "f-chip" + (forumCtx.filesOnly ? " on" : ""), "📎 含资料");
+    bFiles.addEventListener("click", () => { forumCtx.filesOnly = true; loadForumList(); });
+    chips.appendChild(bAll);
+    chips.appendChild(bFiles);
+    body.appendChild(chips);
+  }
   /* 课程过滤：从课程页进入时只看该课程的帖子 */
-  const shown = forumCtx.course ? posts.filter(p => p.course_code === forumCtx.course) : posts;
+  let shown = forumCtx.course ? posts.filter(p => p.course_code === forumCtx.course) : posts;
+  if (forumCtx.filesOnly) shown = shown.filter(p => p.file_path);
   if (forumCtx.course) {
     const bar = el("div", "f-tip");
     bar.appendChild(el("span", "", "只看该课程的讨论与资料 · "));
@@ -2327,7 +2276,7 @@ function renderForumPosts(posts) {
     body.appendChild(bar);
   }
   if (!shown.length) {
-    body.appendChild(el("div", "f-empty", (forumCtx.course ? "这门课还没有帖子，" : "还没有帖子，") + "点右上角「✚ 发帖」抢个沙发～"));
+    body.appendChild(el("div", "f-empty", (forumCtx.course ? "这门课还没有帖子，" : (forumCtx.filesOnly ? "还没有带资料的帖子，" : "还没有帖子，")) + "点右上角「✚ 发帖」抢个沙发～"));
     return;
   }
   for (const p of shown) {
@@ -2505,7 +2454,12 @@ function composeForumPost(presetCourse) {
       <div class="r-form">
         <input id="fpTitle" maxlength="80" placeholder="标题（1-80 字）">
         <select id="fpCourse"></select>
-        <textarea id="fpContent" placeholder="正文（1-4000 字）" style="min-height:110px"></textarea>
+        <textarea id="fpContent" placeholder="正文（可留空，但需关联资料）" style="min-height:110px"></textarea>
+      </div>
+      <div class="f-compose-row" id="fpRow" style="margin-top:10px">
+        <button class="r-btn ghost" id="fpAttach" type="button">📎 关联资料</button>
+        <input id="fpFile" type="file" hidden>
+        <span class="f-file-size" id="fpFileTip"></span>
       </div>
       <div class="modal-actions">
         <button class="ok" id="fpOk">发布</button>
@@ -2515,6 +2469,9 @@ function composeForumPost(presetCourse) {
   const title = $("fpTitle");
   const content = $("fpContent");
   const sel = $("fpCourse");
+  const attach = $("fpAttach");
+  const fileIn = $("fpFile");
+  const fileTip = $("fpFileTip");
   const o0 = el("option");
   o0.value = "";
   o0.textContent = "@ 不关联课程";
@@ -2528,6 +2485,12 @@ function composeForumPost(presetCourse) {
     sel.appendChild(o);
   }
   if (presetCourse) sel.value = presetCourse;
+  attach.addEventListener("click", () => fileIn.click());
+  fileIn.addEventListener("change", () => {
+    const f = fileIn.files[0];
+    fileTip.textContent = f ? (f.name.length > 12 ? f.name.slice(0, 12) + "…" : f.name) + " · " + fmtSize(f.size) : "";
+    attach.textContent = f ? "📎 已选资料" : "📎 关联资料";
+  });
   attachCount(title, 80);
   attachCount(content, 4000);
   bindAutoGrow(content, 300);
@@ -2539,16 +2502,26 @@ function composeForumPost(presetCourse) {
     const t = title.value.trim();
     const c = content.value.trim();
     const code = sel.value || null;
+    const f = fileIn.files[0];
     if (!t) { toast("请填写标题"); title.focus(); return; }
-    if (!c) { toast("请填写正文"); content.focus(); return; }
+    if (!c && !f) { toast("写点正文，或关联一份资料"); content.focus(); return; }
     if (c.length > 4000) { toast("正文过长（≤4000 字）"); return; }
+    if (f && f.size > FILE_MAX) { toast("资料不能超过 5MB"); return; }
     const ok = $("fpOk");
     ok.disabled = true;
-    ok.textContent = "发布中…";
+    ok.textContent = f ? "上传中…" : "发布中…";
     try {
-      const { error } = await supabaseClient.from("forum_posts").insert({
+      let fileMeta = null;
+      if (f) {
+        const ext = (f.name.match(/\.[A-Za-z0-9]+$/) || [""])[0];
+        const path = authUser.id + "/" + Date.now() + ext;
+        const { error: uerr } = await supabaseClient.storage.from("forum-files").upload(path, f, { upsert: false });
+        if (uerr) throw uerr;
+        fileMeta = { file_path: path, file_name: f.name, file_size: f.size };
+      }
+      const { error } = await supabaseClient.from("forum_posts").insert(Object.assign({
         user_id: authUser.id, author: authorShort(authUser.email), title: t, content: c, course_code: code
-      });
+      }, fileMeta));
       if (error) throw error;
       hideModal();
       toast("发布成功");

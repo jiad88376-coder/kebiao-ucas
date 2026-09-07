@@ -549,6 +549,10 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .f-loading, .f-empty { text-align: center; color: var(--muted); font-size: 13px; padding: 34px 10px; line-height: 1.8; }
 .f-tip { font-size: 11.5px; color: #8a6d00; background: #fff8e6; border: 1px solid #f3e3ae;
   border-radius: 9px; padding: 7px 10px; line-height: 1.5; }
+.f-chips { display: flex; gap: 8px; margin: 2px 0; }
+.f-chip { border: 1px solid var(--line); background: var(--card); color: var(--muted); border-radius: 99px;
+  padding: 5px 13px; font-size: 12px; cursor: pointer; }
+.f-chip.on { color: var(--primary); border-color: rgba(47, 111, 237, .5); background: rgba(47, 111, 237, .08); font-weight: 600; }
 .f-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
   padding: 12px 13px; cursor: pointer; transition: filter .15s, border-color .15s, box-shadow .15s; }
 .f-card:active { filter: brightness(.96); }
