@@ -1888,7 +1888,7 @@ function backupModal() {
 /* ---------------- 分享（推荐应用给同学） ---------------- */
 const SHARE_URL = "https://jiad88376-coder.github.io/kebiao-ucas/";
 const SHARE_TEXT = [
-  "「课表」— 国科大人自己的课表工具",
+  "「课壳」— 国科大人自己的课表工具",
   "✓ 粘贴课程代码，3 秒生成整学期课表",
   "✓ 笔记 / 作业 DDL / 考试安排一站式管理",
   "✓ 云同步，手机电脑互通，还能装成手机 App",
@@ -1907,7 +1907,7 @@ function shareLink() {
   const full = SHARE_TEXT + "\n👉 " + url;
   showModal(`
     <div class="modal-card">
-      <h3>推荐「课表」给同学</h3>
+      <h3>推荐「课壳」给同学</h3>
       <p class="share-hint">微信 / QQ 里会显示卡片 · 文案已备好</p>
       <div class="share-text">${SHARE_TEXT}
 👉 ${url}</div>
@@ -1918,7 +1918,7 @@ function shareLink() {
     </div>`);
   $("shText").addEventListener("click", () => {
     if (typeof navigator.share === "function") {
-      navigator.share({ title: "课表 · 国科大课程表", text: SHARE_TEXT, url }).catch(() => {});
+      navigator.share({ title: "课壳 · 国科大课程表", text: SHARE_TEXT, url }).catch(() => {});
     } else copyShare(full, "文案已复制，发给同学吧");
   });
   $("shUrl").addEventListener("click", () => copyShare(url, "链接已复制"));
@@ -2477,7 +2477,7 @@ function init() {
       showModal(`
         <div class="modal-card">
           <div class="auth-logo">🎁</div>
-          <h3>同学邀请你来用「课表」</h3>
+          <h3>同学邀请你来用「课壳」</h3>
           <p class="share-hint">邀请码尾号 ${ref}<br>粘贴课程代码，3 秒生成整学期课表</p>
           <div class="modal-actions">
             <button class="ok" id="refGo">开始生成课表</button>

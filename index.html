@@ -5,19 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#2F6FED">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#12151c">
-<meta name="description" content="国科大人的课表工具：粘贴课程代码 3 秒生成整学期课表，笔记 / 作业 / 考试一站管理，云同步互通，可安装成手机 App。">
-<meta property="og:title" content="课表 · 国科大课程表">
+<meta name="description" content="课壳（国科大课程表）：粘贴课程代码 3 秒生成整学期课表，笔记 / 作业 / 考试一站管理，云同步互通，可安装成手机 App。">
+<meta property="og:title" content="课壳 · 国科大课程表">
 <meta property="og:description" content="粘贴课程代码，3 秒生成整学期课表；笔记 / 作业 DDL / 考试一站管理，还能装成手机 App。">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://jiad88376-coder.github.io/kebiao-ucas/">
 <meta property="og:image" content="https://jiad88376-coder.github.io/kebiao-ucas/icons/icon-512.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="课表">
+<meta name="apple-mobile-web-app-title" content="课壳">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
-<title>课表 · 国科大课程表</title>
+<title>课壳 · 国科大课程表</title>
 <script>
 try {
   var _t = localStorage.getItem("kebiao:theme");
@@ -33,7 +33,7 @@ try {
   <div class="brand">
     <span class="logo">课</span>
     <span class="brand-col">
-      <span class="brand-text">课表</span>
+      <span class="brand-text">课壳</span>
       <span id="termBadge" class="term-badge"></span>
     </span>
   </div>
@@ -59,7 +59,7 @@ try {
 
 <!-- 空状态 / 欢迎页 -->
 <section id="welcome" class="welcome hidden">
-  <h1>生成你的专属课表</h1>
+  <h1>课壳 · 生成你的专属课表</h1>
   <p class="hint">把选课系统里的<b>课程代码</b>粘贴进来（每行一个），或者直接搜索课程名称添加。</p>
   <textarea id="codeInput" spellcheck="false" placeholder="例如：&#10;180081070200P1001H-1&#10;180081070202P3007H&#10;180087120200MX016H"></textarea>
   <button id="btnGenerate" class="primary">生成课表</button>
