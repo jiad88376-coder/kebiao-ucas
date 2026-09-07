@@ -338,6 +338,8 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .tk-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
 .tk-slot { font-weight: 600; flex: none; }
 .tk-room { flex: 1; min-width: 0; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk-sub { margin-top: 10px; }
+.tk-sub-title { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
 
 /* 笔记图片 */
 .np-strip { display: flex; flex-wrap: wrap; gap: 8px; }

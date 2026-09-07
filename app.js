@@ -531,18 +531,40 @@ function recordsOf(code) {
   return state.records[code];
 }
 
-/* 个人课表微调：按"星期+节次"覆盖地点/教师（只影响自己，随 records 云同步） */
+/* 个人课表微调：按"星期+节次"或"具体日期"覆盖地点/教师（只影响自己，随 records 云同步）。
+   查找顺序：单日调整 > 全学期调整 > 课程库默认。 */
 function sessKey(s) { return s.day + "-" + s.p1 + "-" + s.p2; }
+function dateStrOf(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function nextDateStr(dayIdx) {
+  const d = new Date();
+  const cur = d.getDay() === 0 ? 7 : d.getDay();
+  d.setDate(d.getDate() + (dayIdx - cur + 7) % 7);
+  return dateStrOf(d);
+}
 function tweakOf(code, s) {
   const rec = state.records[code];
   return rec && rec.tweaks ? rec.tweaks[sessKey(s)] : null;
 }
-function effRoom(course, s) {
-  const tw = tweakOf(course.code, s);
+function dateTweakOf(code, dateStr, s) {
+  const rec = state.records[code];
+  if (!rec || !rec.tweaksByDate || !rec.tweaksByDate[dateStr]) return null;
+  return rec.tweaksByDate[dateStr][sessKey(s)] || null;
+}
+function effTweak(code, s, dateStr) {
+  if (dateStr) {
+    const t = dateTweakOf(code, dateStr, s);
+    if (t) return t;
+  }
+  return tweakOf(code, s);
+}
+function effRoom(course, s, dateStr) {
+  const tw = effTweak(course.code, s, dateStr);
   return (tw && tw.room) || s.room;
 }
-function effTeacher(course, s) {
-  const tw = tweakOf(course.code, s);
+function effTeacher(course, s, dateStr) {
+  const tw = effTweak(course.code, s, dateStr);
   return (tw && tw.teacher) || course.teacher;
 }
 
@@ -875,7 +897,7 @@ function renderGrid() {
       if (list && list.length) {
         td.rowSpan = list[0].span;
         for (const gc of list) {
-          const block = buildCourseBlock(gc.course, gc.session, conflictSess, viewWeek != null);
+          const block = buildCourseBlock(gc.course, gc.session, conflictSess, viewWeek != null, weekDates ? weekDates[d - 1] : null);
           block.addEventListener("click", () => openDrawer(gc.course.code));
           td.appendChild(block);
         }
@@ -1058,6 +1080,13 @@ function renderDayView(courses) {
   const grid = $("grid");
   grid.classList.add("hidden");
   grid.innerHTML = "";
+  /* 单日视图对应的真实日期（全部周次模式无法定位日期 → 只应用学期级调整） */
+  let dvDate = null;
+  if (viewWeek != null) {
+    const d0 = weekMonday(viewWeek);
+    d0.setDate(d0.getDate() + viewDay - 1);
+    dvDate = dateStrOf(d0);
+  }
   let host = $("dayview");
   if (!host) {
     host = el("div");
@@ -1079,7 +1108,7 @@ function renderDayView(courses) {
       const key = c.code + "|" + s.p1 + "|" + s.p2 + "|" + s.weeks;
       if (placed.has(key)) continue;
       placed.add(key);
-      sess.push({ course: c, p1: s.p1, p2: s.p2, room: effRoom(c, s), teacher: effTeacher(c, s), tw: !!tweakOf(c.code, s) });
+      sess.push({ course: c, p1: s.p1, p2: s.p2, room: effRoom(c, s, dvDate), teacher: effTeacher(c, s, dvDate), tw: !!effTweak(c.code, s, dvDate) });
     }
   }
   sess.sort((a, b) => a.p1 - b.p1 || a.p2 - b.p2);
@@ -1138,14 +1167,14 @@ function renderDayView(courses) {
 }
 
 /* 课程块：课程名 / 教师·教室 / 周次（对齐 Excel 版）；周视图下不重复显示周次 */
-function buildCourseBlock(course, session, conflictSess, weekView) {
+function buildCourseBlock(course, session, conflictSess, weekView, dateStr) {
   const isConflict = conflictSess.has(`${session.day}-${session.p1}-${session.p2}`);
   const block = el("div", "course-cell " + attrClass(course.attr) + (isConflict ? " conflict" : ""));
   block.appendChild(el("div", "cc-name", course.name));
-  const tw = tweakOf(course.code, session);
+  const tw = effTweak(course.code, session, dateStr);
   const meta = [];
-  const teacher = effTeacher(course, session);
-  const room = effRoom(course, session);
+  const teacher = effTeacher(course, session, dateStr);
+  const room = effRoom(course, session, dateStr);
   if (teacher) meta.push(teacher);
   if (room) meta.push(room);
   if (meta.length) block.appendChild(el("div", "cc-meta", meta.join(" · ") + (tw ? " ✎" : "")));
@@ -1324,7 +1353,7 @@ function showTweakModal(code) {
   }
   const modalCard = el("div", "modal-card");
   modalCard.appendChild(el("h3", "", "📍 调整上课信息"));
-  modalCard.appendChild(el("p", "share-hint", "仅修改你课表里的显示（如教室临时调整），全学期按节次生效，不影响任何人。"));
+  modalCard.appendChild(el("p", "share-hint", "仅修改你课表里的显示，不影响任何人。可选「整个学期」或「仅某一天」（临时换教室）。"));
   const list = el("div", "tk-list");
   for (const s of slots) {
     const tw = tweakOf(code, s);
@@ -1337,6 +1366,39 @@ function showTweakModal(code) {
     list.appendChild(row);
   }
   modalCard.appendChild(list);
+
+  /* 已有的单日调整（可单独删除） */
+  const rec = state.records[code];
+  if (rec && rec.tweaksByDate) {
+    const dates = Object.keys(rec.tweaksByDate).sort();
+    if (dates.length) {
+      const sub = el("div", "tk-sub");
+      sub.appendChild(el("div", "tk-sub-title", "单日临时调整"));
+      for (const ds of dates) {
+        for (const k of Object.keys(rec.tweaksByDate[ds])) {
+          const parts = k.split("-");
+          const dayIdx = Number(parts[0]);
+          const row = el("div", "tk-row");
+          row.appendChild(el("span", "tk-slot", ds.slice(5) + " " + DAY_NAMES[dayIdx - 1].slice(1)));
+          const twd = rec.tweaksByDate[ds][k] || {};
+          row.appendChild(el("span", "tk-room", (twd.room || "（恢复默认地点）") + " ✎"));
+          const x = el("button", "r-btn small danger", "删除");
+          x.addEventListener("click", () => {
+            delete rec.tweaksByDate[ds][k];
+            if (!Object.keys(rec.tweaksByDate[ds]).length) delete rec.tweaksByDate[ds];
+            saveState();
+            render();
+            toast("已删除该单日调整");
+            showTweakModal(code);
+          });
+          row.appendChild(x);
+          sub.appendChild(row);
+        }
+      }
+      modalCard.appendChild(sub);
+    }
+  }
+
   const actions = el("div", "modal-actions");
   const close = el("button", "cancel", "关闭");
   close.addEventListener("click", hideModal);
@@ -1347,12 +1409,19 @@ function showTweakModal(code) {
 function editTweakSlot(code, s) {
   const c = courseMap[code];
   const tw = tweakOf(code, s) || {};
+  const defDate = nextDateStr(s.day);
+  const dtw = dateTweakOf(code, defDate, s) || {};
   showModal(`
     <div class="modal-card">
       <h3>${DAY_NAMES[s.day - 1]} 第${s.p1}${s.p2 > s.p1 ? "-" + s.p2 : ""}节</h3>
       <div class="r-form">
         <input id="twRoom" maxlength="30" placeholder="上课地点（如：教一楼 302）">
         <input id="twTeacher" maxlength="30" placeholder="教师（可选，留空用默认）">
+        <select id="twScope">
+          <option value="slot">生效范围：整个学期（该时段全部课）</option>
+          <option value="date">生效范围：仅某一天（临时调整）</option>
+        </select>
+        <input id="twDate" type="date" class="hidden">
       </div>
       <div class="modal-actions">
         <button class="ok" id="twSave">保存</button>
@@ -1360,26 +1429,54 @@ function editTweakSlot(code, s) {
         <button class="cancel" id="twCancel">取消</button>
       </div>
     </div>`);
-  $("twRoom").value = tw.room || "";
-  $("twTeacher").value = tw.teacher || "";
+  $("twRoom").value = tw.room || dtw.room || "";
+  $("twTeacher").value = tw.teacher || dtw.teacher || "";
+  const dateIn = $("twDate");
+  dateIn.value = defDate;
+  $("twScope").addEventListener("change", () => {
+    const isDate = $("twScope").value === "date";
+    dateIn.classList.toggle("hidden", !isDate);
+  });
   $("twSave").addEventListener("click", () => {
     const room = $("twRoom").value.trim();
     const teacher = $("twTeacher").value.trim();
+    const isDate = $("twScope").value === "date";
+    const dateStr = isDate ? $("twDate").value : null;
+    if (isDate && !dateStr) { toast("请选择日期"); return; }
     const rec = recordsOf(code);
-    if (!rec.tweaks) rec.tweaks = {};
     const k = sessKey(s);
+    const val = Object.assign({}, room ? { room } : {}, teacher ? { teacher } : {});
     const same = room === (s.room || "") && teacher === (c.teacher || "");
-    if (same) delete rec.tweaks[k];
-    else rec.tweaks[k] = Object.assign({}, room ? { room } : {}, teacher ? { teacher } : {});
+    if (isDate) {
+      if (!rec.tweaksByDate) rec.tweaksByDate = {};
+      if (!rec.tweaksByDate[dateStr]) rec.tweaksByDate[dateStr] = {};
+      if (same) delete rec.tweaksByDate[dateStr][k];
+      else rec.tweaksByDate[dateStr][k] = val;
+      if (!Object.keys(rec.tweaksByDate[dateStr]).length) delete rec.tweaksByDate[dateStr];
+    } else {
+      if (!rec.tweaks) rec.tweaks = {};
+      if (same) delete rec.tweaks[k];
+      else rec.tweaks[k] = val;
+    }
     saveState();
     hideModal();
     render();
-    toast(same ? "已恢复该节默认信息" : "已保存，仅自己可见");
+    toast(same ? "已恢复该节默认信息" : isDate ? "已保存（仅 " + dateStr.slice(5) + " 生效）" : "已保存，全学期生效");
     showTweakModal(code);
   });
   $("twReset").addEventListener("click", () => {
     const rec = recordsOf(code);
-    if (rec.tweaks) delete rec.tweaks[sessKey(s)];
+    const isDate = $("twScope").value === "date";
+    const k = sessKey(s);
+    if (isDate) {
+      const dateStr = $("twDate").value;
+      if (rec.tweaksByDate && rec.tweaksByDate[dateStr]) {
+        delete rec.tweaksByDate[dateStr][k];
+        if (!Object.keys(rec.tweaksByDate[dateStr]).length) delete rec.tweaksByDate[dateStr];
+      }
+    } else if (rec.tweaks) {
+      delete rec.tweaks[k];
+    }
     saveState();
     hideModal();
     render();
