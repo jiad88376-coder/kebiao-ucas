@@ -272,7 +272,13 @@ function probeSources() {
 }
 document.getElementById("refresh").addEventListener("click", load);
 load();
-setInterval(load, 60000);
+/* 每 5 分钟刷新一次，且仅在前台时刷新（监测页自身也是额度客户，别烧自己的额度） */
+setInterval(function () {
+  if (document.visibilityState === "visible") load();
+}, 300000);
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState === "visible") load();
+});
 </script>
 </body>
 </html>
