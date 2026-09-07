@@ -1745,16 +1745,33 @@ function showMoreMenu() {
         <button class="menu-item" id="mmBackup"><span class="mi-ico">⤓</span><span>备份与恢复</span></button>
       </div>
     </div>`);
-  $("mmSync").addEventListener("click", async () => {
+  $("mmSync").addEventListener("click", () => {
     hideModal();
     if (!supabaseClient) { toast("云服务未就绪"); return; }
-    if (!authUser) { promptLogin("登录后才能云备份"); return; }
+    if (!authUser) { showCloudPitch(); return; }
     if (stateHash() === lastPushedHash) { toast("云端已是最新 ☁"); return; }
-    await pushToCloud();
-    toast(stateHash() === lastPushedHash ? "已备份到云端 ☁" : "备份失败，请稍后重试");
+    pushToCloud().then(() => {
+      toast(stateHash() === lastPushedHash ? "已备份到云端 ☁" : "备份失败，请稍后重试");
+    });
   });
   $("mmCodes").addEventListener("click", () => { hideModal(); showCodesModal(); });
   $("mmBackup").addEventListener("click", () => { hideModal(); backupModal(); });
+}
+
+/* 云备份注册引导：未登录点"立即云备份"时展示（讲清楚价值，注册优先） */
+function showCloudPitch() {
+  showModal(`
+    <div class="modal-card auth-card">
+      <div class="auth-logo">☁</div>
+      <div class="auth-head">云备份需要免费注册</div>
+      <p class="auth-desc">注册后课表 / 笔记 / 作业 / 考试自动备份云端<br>换手机、清缓存都不怕丢</p>
+      <div class="modal-actions">
+        <button class="ok" id="cpSignup">立即注册</button>
+        <button class="cancel" id="cpLogin">已有账号，登录</button>
+      </div>
+    </div>`);
+  $("cpSignup").addEventListener("click", () => showAuthSignupUI(""));
+  $("cpLogin").addEventListener("click", () => showAuthModal());
 }
 
 function backupModal() {
