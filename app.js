@@ -1807,7 +1807,7 @@ function renderForumPosts(posts) {
     }
     if (p.file_path) titleRow.appendChild(el("span", "f-tag f-tag-file", "📎 附件"));
     card.appendChild(titleRow);
-    card.appendChild(el("div", "f-preview", p.content.length > 64 ? p.content.slice(0, 64) + "…" : p.content));
+    card.appendChild(el("div", "f-preview", (p.content || "").length > 64 ? p.content.slice(0, 64) + "…" : (p.content || "")));
     const meta = el("div", "f-meta");
     meta.appendChild(el("span", "", authorShort(p.author)));
     meta.appendChild(el("span", "", fmtTime(p.created_at)));
@@ -2273,8 +2273,11 @@ function chooseSchool(id) {
 const DID_KEY = "kebiao:did";
 const REPLY_SEEN_KEY = "kebiao:replyseen";
 const REPLY_BADGE_KEY = "kebiao:replybadge";
+const REPLY_LATEST_KEY = "kebiao:replylatest";
 let replyBadge = 0;
 try { replyBadge = Number(localStorage.getItem(REPLY_BADGE_KEY)) || 0; } catch (e) {}
+let replyLatest = null; /* 服务端时间戳：未读回复里最新一条的时间，用作已读游标（免疫本机时钟偏差） */
+try { replyLatest = localStorage.getItem(REPLY_LATEST_KEY); } catch (e) {}
 
 function renderReplyBadge() {
   if (typeof document === "undefined") return;
@@ -2289,7 +2292,7 @@ function renderReplyBadge() {
 function clearReplyBadge() {
   replyBadge = 0;
   try { localStorage.setItem(REPLY_BADGE_KEY, "0"); } catch (e) {}
-  try { localStorage.setItem(REPLY_SEEN_KEY, new Date().toISOString()); } catch (e) {}
+  try { localStorage.setItem(REPLY_SEEN_KEY, replyLatest || new Date().toISOString()); } catch (e) {}
   renderReplyBadge();
 }
 function statsPing() {
@@ -2311,6 +2314,10 @@ function statsPing() {
         if (d && typeof d.n === "number") {
           replyBadge = d.n;
           try { localStorage.setItem(REPLY_BADGE_KEY, String(d.n)); } catch (e) {}
+          if (d.latest) {
+            replyLatest = d.latest;
+            try { localStorage.setItem(REPLY_LATEST_KEY, String(d.latest)); } catch (e) {}
+          }
           renderReplyBadge();
         }
       }, () => {});

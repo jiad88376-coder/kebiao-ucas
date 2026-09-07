@@ -538,8 +538,6 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .f-reply { background: var(--card); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; position: relative; }
 .f-reply-head { font-size: 11px; color: var(--muted); }
 .f-reply-content { font-size: 14px; line-height: 1.6; margin-top: 3px; white-space: pre-wrap; word-break: break-word; }
-.f-cp { cursor: default; }
-.f-cp.mine { border-left: 3px solid var(--primary); }
 .f-file { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding: 9px 11px;
   background: #f0f5ff; border: 1px dashed #b9cdf7; border-radius: 9px;
   color: #1d56c8; font-size: 13px; text-decoration: none; }
