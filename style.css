@@ -323,6 +323,8 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
 .conflict-mark { width: 11px; height: 11px; border-radius: 3px; display: inline-block;
   border: 2px solid var(--danger); }
 footer.footnote { text-align: center; margin: 10px 0 26px; }
+#support-link { color: var(--muted, #8a93a6); text-decoration: none; opacity: .75; }
+#support-link:active, #support-link:hover { opacity: 1; color: var(--primary, #3b82f6); }
 
 /* ---------- 抽屉 ---------- */
 .overlay { position: fixed; inset: 0; background: rgba(15,20,35,.45); z-index: 50; animation: fadeIn .2s ease both; }
