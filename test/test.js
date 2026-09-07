@@ -97,5 +97,31 @@ ok(app.nearestCourseDay(2, csTueThu, monW2) === 4, "第2周周三(周二/周四�
 ok(app.nearestCourseDay(5, [{ sessions: [{ day: 1, weekSet: [[1, 4]] }] }], new Date(2026, 8, 6)) === 0, "目标周全无课 → 0(不乱跳)");
 ok(app.nearestCourseDay(2, [{ sessions: [{ day: 1, weekSet: [[3, 4]] }] }], new Date(2026, 8, 6)) === 0, "该日不在目标周次 → 0");
 
+console.log("== effSlot（上课时间微调：学期/单日覆盖） ==");
+const sessT = { day: 3, p1: 3, p2: 4, room: "教一楼207" };
+app.__setRecords({});
+let es = app.effSlot("C1", sessT, null);
+ok(es.day === 3 && es.p1 === 3 && es.p2 === 4, "无微调 → 时段原样");
+app.__setRecords({ C1: { tweaks: { "3-3-4": { day: 5, p1: 10, p2: 12 } } } });
+es = app.effSlot("C1", sessT, null);
+ok(es.day === 5 && es.p1 === 10 && es.p2 === 12, "学期级时间覆盖生效");
+app.__setRecords({ C1: { tweaks: { "3-3-4": { room: "教二楼218" } } } });
+es = app.effSlot("C1", sessT, null);
+ok(es.day === 3 && es.p1 === 3 && es.p2 === 4, "旧版 room-only 微调不改时间");
+app.__setRecords({ C1: {
+  tweaks: { "3-3-4": { day: 5, p1: 10, p2: 12 } },
+  tweaksByDate: { "2026-09-09": { "3-3-4": { day: 4 } } }
+} });
+es = app.effSlot("C1", sessT, "2026-09-09");
+ok(es.day === 4 && es.p1 === 3 && es.p2 === 4, "单日级时间覆盖优先");
+es = app.effSlot("C1", sessT, "2026-09-10");
+ok(es.day === 5, "其他日期回落学期级");
+app.__setRecords({ C1: { tweaks: { "3-3-4": { day: 6 } } } });
+es = app.effSlot("C1", sessT, null);
+ok(es.day === 6 && es.p1 === 3 && es.p2 === 4, "只改星期，节次保留");
+app.__setRecords({});
+es = app.effSlot("C1", sessT, null);
+ok(es.day === 3 && es.p1 === 3 && es.p2 === 4, "清理后回落原始时段");
+
 console.log(`\n通过 ${passed} 项测试`);
 if (process.exitCode) { console.error("存在失败项"); process.exit(1); }

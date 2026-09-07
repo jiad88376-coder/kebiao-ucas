@@ -659,7 +659,10 @@ function addCodes(rawCodes, { silent = false } = {}) {
     lines.push(`以下代码未识别（${unknown.length}）：${unknown.join("，")}`);
     showBanner(lines.join("\n"), true);
   } else if (found.length || dupes.length) {
-    const conflicts = findConflicts(state.codes.map(c => courseMap[c]));
+    const conflicts = findConflicts(state.codes.map(c => courseMap[c]).map((c0) => {
+      if (!c0) return c0;
+      return Object.assign({}, c0, { sessions: c0.sessions.map(s => Object.assign({}, s, effSlot(c0.code, s, null))) });
+    }));
     if (conflicts.length) {
       lines.push(`⚠ 检测到 ${conflicts.length} 处时间冲突：`);
       for (const cf of conflicts) {
@@ -761,7 +764,8 @@ function nearestCourseDay(w, courses, ref) {
   const byDay = new Array(8).fill(false);
   for (const c of courses || []) {
     for (const s of (c.sessions || [])) {
-      const d = Number(s.day);
+      const es = effSlot(c.code, s, null); /* 学期级时间调整后的星期 */
+      const d = Number(es.day);
       if (d >= 1 && d <= 7 && inWeekSet(s.weekSet, w)) byDay[d] = true;
     }
   }
@@ -788,7 +792,7 @@ function smartRealignDay() {
   if (viewWeek == null || !viewDay) return;
   if (viewWeek === curWeek() && viewDay === dayIndexOfToday()) return;
   const courses = state.codes.map(code => courseMap[code]).filter(Boolean);
-  const has = courses.some(c => (c.sessions || []).some(s => Number(s.day) === viewDay && inWeekSet(s.weekSet, viewWeek)));
+  const has = courses.some(c => (c.sessions || []).some(s => Number(effSlot(c.code, s, null).day) === viewDay && inWeekSet(s.weekSet, viewWeek)));
   if (has) return;
   const nd = nearestCourseDay(viewWeek, courses, new Date());
   if (nd) viewDay = nd;
@@ -863,7 +867,7 @@ function renderGrid() {
     for (const s of c.sessions) {
       const es = effSlot(c.code, s, slotDate(s));
       if (!(es.day >= 1 && es.day <= 7 && es.p1 >= 1 && es.p2 >= es.p1 && es.p2 <= maxP)) continue;
-      const key = `${c.code}|${es.day}|${es.p1}|${es.p2}|${s.weeks}`;
+      const key = `${c.code}|${s.day}|${s.p1}|${s.p2}|${es.day}|${es.p1}|${es.p2}|${s.weeks}`;
       if (placed.has(key)) continue;
       placed.add(key);
       const span = es.p2 - es.p1 + 1;
@@ -1263,13 +1267,7 @@ function renderDayView(courses) {
   const grid = $("grid");
   grid.classList.add("hidden");
   grid.innerHTML = "";
-  /* 单日视图对应的真实日期（全部周次模式无法定位日期 → 只应用学期级调整） */
-  let dvDate = null;
-  if (viewWeek != null) {
-    const d0 = weekMonday(viewWeek);
-    d0.setDate(d0.getDate() + viewDay - 1);
-    dvDate = dateStrOf(d0);
-  }
+  /* 本视图周的周一（全部周次模式为 null → 只应用学期级调整） */
   const wkMon = viewWeek != null ? weekMonday(viewWeek) : null;
   let host = $("dayview");
   if (!host) {
@@ -1293,7 +1291,7 @@ function renderDayView(courses) {
       const es = effSlot(c.code, s, sDate);
       if (es.day !== day) continue;
       if (!(es.p1 >= 1 && es.p2 >= es.p1 && es.p2 <= maxP)) continue;
-      const key = c.code + "|" + es.p1 + "|" + es.p2 + "|" + s.weeks;
+      const key = c.code + "|" + s.day + "|" + s.p1 + "|" + s.p2 + "|" + es.p1 + "|" + es.p2 + "|" + s.weeks;
       if (placed.has(key)) continue;
       placed.add(key);
       sess.push({ course: c, p1: es.p1, p2: es.p2, room: effRoom(c, s, sDate), teacher: effTeacher(c, s, sDate), tw: !!effTweak(c.code, s, sDate) });
@@ -1410,7 +1408,7 @@ function bindSearch(inputEl, sugEl, onPick) {
       name.appendChild(el("span", "sug-code", c.code));
       const meta = el("div", "sug-meta");
       const first = c.sessions[0];
-      meta.textContent = `${c.credit != null ? c.credit + "分" : ""} ${c.teacher || ""}${first ? " · " + fmtSession(first) : " · 时间待定"}`;
+      meta.textContent = `${c.credit != null ? c.credit + "分" : ""} ${c.teacher || ""}${first ? " · " + fmtSession(effSlot(c.code, first, null)) : " · 时间待定"}`;
       item.appendChild(name);
       item.appendChild(meta);
       item.addEventListener("click", () => pick(c));
@@ -3180,6 +3178,8 @@ if (typeof module !== "undefined" && module.exports) {
     normalizeCode, parseCodes, weeksOverlap, sessionOverlap,
     conflictsBetween, findConflicts, fmtSession, daysLeft, DAY_NAMES, PERIOD_TIMES,
     getSemesterWeek, inWeekSet, fmtWeekRange, SEMESTER_MONDAY, MAX_WEEK,
-    weekMonday, nearestCourseDay
+    weekMonday, nearestCourseDay,
+    effSlot,
+    __setRecords: (o) => { state.records = o || {}; } /* 仅供测试注入微调数据 */
   };
 }
