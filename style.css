@@ -223,6 +223,10 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
 .wxm-chg { flex: 1; min-width: 0; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wxm-x { flex: none; color: var(--primary); font-size: 11.5px; font-weight: 600; }
 .day-wx.closed .wx-strip { display: none; }
+/* 收起态：整卡塌缩成一行（只留摘要条，卡片头/容器全部隐藏） */
+.day-wx.closed { padding: 0; background: transparent; border-color: transparent; box-shadow: none; animation: none; }
+.day-wx.closed .day-sec-head { display: none; }
+.day-wx.closed .wx-mini { border-radius: var(--radius); }
 .wx-h {
   flex: none; min-width: 46px; padding: 7px 4px; border-radius: 9px;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
