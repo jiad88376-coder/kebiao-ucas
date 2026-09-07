@@ -60,6 +60,8 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
 .cap .c { border: 1px dashed var(--line); border-radius: 12px; padding: 11px 12px; font-size: 13px; }
 .cap .c b { display: block; font-size: 13.5px; margin-bottom: 3px; }
 .cap .c span { color: var(--muted); font-size: 12.5px; }
+.cap .c.primary { border-style: solid; border-color: rgba(47, 111, 237, .45); }
+.cap .c.primary b { color: var(--primary); }
 .note { color: var(--muted); font-size: 12px; margin: 12px 2px 0; }
 .err { padding: 30px 16px; text-align: center; color: var(--muted); font-size: 14px; }
 </style>
@@ -77,29 +79,38 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
     <div class="legend"><span><i class="bar-o"></i>独立设备（当日去重）</span></div>
   </section>
   <section class="panel">
+    <h2>线路状态（实时探测 · 与前端 PROXY_SOURCES 一致）</h2>
+    <div class="cap" id="srcBox"></div>
+    <p class="note">双源惰性切换：默认走主线路 CF Worker（自有域名 api.courseshell.cloud），遇到网络类错误自动轮换备胎重试；每次调用最多切换 1 次，下次会话自动回到主线路。监测数据读取同样走这套双源切换。EdgeOne 备胎站点已被平台回收下线，重新部署后加一行即可恢复。</p>
+  </section>
+  <section class="panel">
+    <h2>承载水位（估算 · 最坏口径）</h2>
+    <div id="meters"></div>
+    <p class="note">口径：每次打开 ≈ 1.5 次云端调用（同步节流 + 论坛缓存后）。水位按「全部流量都走该线路」的最坏情况估算——实际上主线路 CF 承接几乎全部流量，Netlify 只在故障切换时短暂接手，其真实占用远低于所示。Supabase 数据库/存储目前仅几 MB，≈0%，暂不画条。</p>
+  </section>
+  <section class="panel">
     <h2>论坛生态（累计）</h2>
     <div class="cap" id="forumBox">
       <div class="c"><b>…</b><span>加载中</span></div>
     </div>
   </section>
   <section class="panel">
-    <h2>线路状态（实时探测）</h2>
+    <h2>当前架构一览</h2>
     <div class="cap">
-      <div class="c" id="srcNetlify"><b>Netlify 反代（唯一在线源）</b><span>探测中…</span></div>
+      <div class="c primary"><b>前端 · GitHub Pages</b><span>SW v24：核心文件网络优先（绕 HTTP 缓存），课程库缓存优先 + 后台自愈</span></div>
+      <div class="c"><b>学校 · 双校</b><span>国科大（默认 · 三校区）+ 杭高院 HIAS（单校区 · 157 门课），选校页搜索接入</span></div>
+      <div class="c"><b>云端 · Supabase</b><span>认证 / 云同步 / 笔记附件 / 论坛 / 统计，RLS 全锁</span></div>
+      <div class="c"><b>线路 · 双源反代</b><span>api.courseshell.cloud（CF Worker）→ Netlify，惰性故障切换</span></div>
+      <div class="c"><b>域名 · courseshell.cloud</b><span>阿里云注册 · Cloudflare DNS（kayden / lia）· 自定义域绑定 Worker</span></div>
     </div>
-    <p class="note">免费额度 12.5 万次/月，同步节流 + 论坛缓存后可支撑约 5000 日活。前端已内置惰性故障切换框架，未来新增线路改一行配置即可接入。</p>
-  </section>
-  <section class="panel">
-    <h2>承载水位（估算 · 免费额度）</h2>
-    <div id="meters"></div>
-    <p class="note">估算口径：每次打开 ≈ 1.5 次函数调用（15 分钟同步节流 + 论坛缓存后；改动课表/笔记才额外推送）。Supabase 数据库/存储目前仅几百 KB，≈0%，暂不画条。</p>
   </section>
   <section class="panel">
     <h2>容量参照（免费额度）</h2>
     <div class="cap">
+      <div class="c"><b>CF Workers</b><span>10 万请求/天（≈300 万/月）· 主线路，日活 3 万内无压力</span></div>
       <div class="c"><b>GitHub Pages</b><span>带宽约 100GB/月 · 静态资源，数千日活无压力</span></div>
       <div class="c"><b>Supabase</b><span>数据库 500MB · 存储 1GB · 出流量 5GB/月 · Auth 5 万月活</span></div>
-      <div class="c"><b>Netlify Functions</b><span>12.5 万次/月 · 同步节流+缓存后 ≈ 日活 5000</span></div>
+      <div class="c"><b>Netlify Functions</b><span>12.5 万次/月 · 备胎，仅在主线路故障时消耗</span></div>
     </div>
     <p class="note">口径说明：打开次数 = 每次进入网站 +1（会话内去重）；独立设备 = 当天去重后的随机设备 ID 数。连续多日 >100 时建议升级方案。</p>
   </section>
@@ -107,11 +118,13 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
 <div id="errbox"></div>
 <script>
 var API_KEY = "sb_publishable_ONe5Ft1rxeRt-rcdruXYoQ_sM0jgwLn";
-var API = "https://kebiao-ucas.netlify.app/.netlify/functions/supabase/rest/v1/site_stats?select=day,opens,devices&order=day.desc&limit=90";
-var RPC_SUM = "https://kebiao-ucas.netlify.app/.netlify/functions/supabase/rest/v1/rpc/stats_summary";
-var RPC_FORUM = "https://kebiao-ucas.netlify.app/.netlify/functions/supabase/rest/v1/rpc/stats_forum";
+/* 双源定义（与 app.js PROXY_SOURCES 保持一致；cf 的 path 为空 = 直透 Supabase 路径） */
+var SOURCES = [
+  { id: "cf",      label: "CF Worker", role: "主线路 · api.courseshell.cloud", base: "https://api.courseshell.cloud", path: "" },
+  { id: "netlify", label: "Netlify",   role: "备胎 · 海外函数",                base: "https://kebiao-ucas.netlify.app", path: "/.netlify/functions/supabase" }
+];
 /* 免费额度常量 */
-var CAP = { funcDay: 4166, funcMonth: 125000, pagesMonthMB: 102400 };
+var CAP = { cfDay: 100000, cfMonth: 3000000, funcMonth: 125000, pagesMonthMB: 102400 };
 
 function meter(label, used, cap, unit) {
   var pct = Math.min(100, used / cap * 100);
@@ -131,6 +144,23 @@ function beijingDate(off) {
   return new Date(Date.now() + 8 * 3600e3 + (off || 0) * 86400e3).toISOString().slice(0, 10);
 }
 function beijingToday() { return beijingDate(0); }
+
+/* 三源顺序尝试读取（网络失败/HTTP 异常自动换下一源） */
+function fetchVia(path, headers) {
+  var i = 0;
+  function attempt() {
+    var s = SOURCES[i];
+    return fetch(s.base + s.path + path, { headers: headers }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    }).catch(function (e) {
+      i++;
+      if (i >= SOURCES.length) throw e;
+      return attempt();
+    });
+  }
+  return attempt();
+}
 
 function render(rows, s) {
   var uN = s ? (s.confirmed != null ? s.confirmed : s.users) : null;
@@ -163,8 +193,9 @@ function render(rows, s) {
     card(yest.opens, "昨日打开") + card((sum7 / wk.length).toFixed(1), "7日日均打开") +
     card(sum30, "30天累计打开");
   document.getElementById("meters").innerHTML =
-    meter("Netlify 函数 · 今日", today.opens * 1.5, CAP.funcDay, "次") +
-    meter("Netlify 函数 · 本月", sum30 * 1.5, CAP.funcMonth, "次") +
+    meter("CF Worker · 今日", today.opens * 1.5, CAP.cfDay, "次") +
+    meter("CF Worker · 本月", sum30 * 1.5, CAP.cfMonth, "次") +
+    meter("Netlify · 本月（备胎，正常≈0）", sum30 * 1.5, CAP.funcMonth, "次") +
     meter("GitHub Pages 带宽 · 本月", sum30 * 1.5, CAP.pagesMonthMB, "MB");
   drawChart(rows.slice(0, 30).reverse());
   var live = document.getElementById("live");
@@ -205,21 +236,17 @@ function drawChart(days) {
 }
 
 function load() {
-  fetch(API, { headers: { apikey: API_KEY } })
-    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+  fetchVia("/rest/v1/site_stats?select=day,opens,devices&order=day.desc&limit=90", { apikey: API_KEY })
     .then(function (rows) {
       /* 已注册用户数：security definer RPC（未建该函数时显示 —） */
-      fetch(RPC_SUM, { headers: { apikey: API_KEY } })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (s) {
-          render(rows, s && s[0] ? s[0] : null);
-        })
+      fetchVia("/rest/v1/rpc/stats_summary", { apikey: API_KEY })
+        .then(function (s) { render(rows, s && s[0] ? s[0] : null); })
         .catch(function () { render(rows, null); });
       probeSources();
       loadForum();
     })
     .catch(function (e) {
-      document.getElementById("live").textContent = "🔴 无法连接数据源";
+      document.getElementById("live").textContent = "🔴 无法连接数据源（双源均失败）";
       document.getElementById("live").className = "live old";
       document.getElementById("errbox").innerHTML = '<div class="err">数据加载失败：' + (e.message || e) + '</div>';
     });
@@ -228,8 +255,7 @@ function load() {
 /* 论坛生态计数：security definer RPC（未建该函数时显示提示） */
 function loadForum() {
   var box = document.getElementById("forumBox");
-  fetch(RPC_FORUM, { headers: { apikey: API_KEY } })
-    .then(function (r) { return r.ok ? r.json() : null; })
+  fetchVia("/rest/v1/rpc/stats_forum", { apikey: API_KEY })
     .then(function (s) {
       var v = s && s[0] ? s[0] : null;
       if (!v) {
@@ -248,25 +274,33 @@ function loadForum() {
     });
 }
 
-/* 线路探测：反代源健康与延迟 */
+/* 线路探测：逐源显示健康与延迟（主线路加高亮框） */
+function renderSourceBoxes() {
+  var box = document.getElementById("srcBox");
+  var html = "";
+  for (var i = 0; i < SOURCES.length; i++) {
+    html += '<div class="c' + (i === 0 ? " primary" : "") + '" id="src-' + SOURCES[i].id + '"><b>' +
+      SOURCES[i].label + '</b><span>探测中…</span><br><small style="color:var(--muted)">' + SOURCES[i].role + '</small></div>';
+  }
+  box.innerHTML = html;
+}
 function probeSources() {
-  var PROBES = [
-    { id: "srcNetlify", base: "https://kebiao-ucas.netlify.app", path: "/.netlify/functions/supabase" }
-  ];
-  for (var i = 0; i < PROBES.length; i++) (function (p) {
+  renderSourceBoxes();
+  for (var i = 0; i < SOURCES.length; i++) (function (p) {
     var t0 = Date.now();
-    var box = document.getElementById(p.id);
     fetch(p.base + p.path + "/rest/v1/site_stats?select=day&limit=1", { headers: { apikey: API_KEY } })
       .then(function (r) {
         var ms = Date.now() - t0;
-        box.querySelector("span").textContent = r.ok
+        var el = document.querySelector("#src-" + p.id + " span");
+        if (el) el.textContent = r.ok
           ? "🟢 健康 · " + ms + "ms"
           : "🔴 异常 HTTP " + r.status + " · " + ms + "ms";
       })
       .catch(function () {
-        box.querySelector("span").textContent = "🔴 不可达 · " + (Date.now() - t0) + "ms";
+        var el = document.querySelector("#src-" + p.id + " span");
+        if (el) el.textContent = "🔴 不可达 · " + (Date.now() - t0) + "ms";
       });
-  })(PROBES[i]);
+  })(SOURCES[i]);
 }
 document.getElementById("refresh").addEventListener("click", load);
 load();
