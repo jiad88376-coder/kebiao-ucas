@@ -1,5 +1,5 @@
 /* Service Worker: 离线缓存应用外壳 + 课程库 */
-const CACHE = "kebiao-ucas-v22";
+const CACHE = "kebiao-ucas-v23";
 const ASSETS = [
   "./",
   "./index.html",
@@ -41,9 +41,9 @@ self.addEventListener("fetch", (e) => {
   const name = url.pathname.split("/").pop();
   const isCore = CORE.includes(name) || req.mode === "navigate";
   if (isCore) {
-    /* 页面/JS/样式：在线每次都拉最新（打开即新版），离线才用缓存 */
+    /* 页面/JS/样式：在线每次都拉最新（cache:"reload" 强制绕过浏览器 HTTP 缓存，杜绝 10 分钟旧样式窗口），离线才用缓存 */
     e.respondWith(
-      fetch(req).then((res) => {
+      fetch(req, { cache: "reload" }).then((res) => {
         if (res && res.ok) {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
