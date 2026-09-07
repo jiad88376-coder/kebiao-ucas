@@ -935,13 +935,125 @@ function activeSections() {
   return (SCHOOL_SECTIONS && SCHOOL_SECTIONS.length) ? SCHOOL_SECTIONS : DAY_SECTIONS;
 }
 const DAY_EGGS = {
-  am: ["上午没课，睡到自然醒 😴", "上午的空白，是赖床的许可 🛏️", "上午没课，去吃顿不慌不忙的早餐 🥣"],
-  pm: ["下午没课，球场 / 图书馆 / 被窝三选一 🏸", "下午自由支配，来杯咖啡 ☕", "下午没课，去校园里走走 🍃"],
-  eve: ["晚上没安排，追剧还是自习？📺", "晚风正好，去操场跑两圈 🏃", "晚上没课，早点睡 🌌"]
+  am: [
+    "上午没课，睡到自然醒 😴",
+    "上午的空白，是赖床的许可 🛏️",
+    "上午没课，去吃顿不慌不忙的早餐 🥣",
+    "上午空档：背 20 个单词再玩 📖",
+    "上午自由，把上周欠的觉还了 💤",
+    "阳光很好，去图书馆占个窗边位 ☀️",
+    "上午没课还自然醒了？你已经赢麻了 🏆"
+  ],
+  pm: [
+    "下午没课，球场 / 图书馆 / 被窝三选一 🏸",
+    "下午自由支配，来杯咖啡 ☕",
+    "下午没课，去校园里走走 🍃",
+    "下午空档，适合把实验报告先写了 📝",
+    "下午没课，给家里打个电话 📞",
+    "阳光正好，去操场晒晒太阳 🌤",
+    "下午自由，健身卡别浪费了 🏋️"
+  ],
+  eve: [
+    "晚上没安排，追剧还是自习？📺",
+    "晚风正好，去操场跑两圈 🏃",
+    "晚上没课，早点睡 🌌",
+    "晚上自由，和朋友约顿晚饭 🍜",
+    "晚自习氛围拉满，去教学楼蹭个座 📚",
+    "晚上没课，把明天的自己照顾好 🌙",
+    "夜里亮着灯的图书馆，要不要去坐坐？💡"
+  ]
 };
-const DAY_FREE_EGGS = ["🎉 今天全天没课！来一场说走就走的……自习", "全天无课！这是本周最好的礼物 🎁", "今天零节课，快乐完全属于自己 🍰"];
+const DAY_FREE_EGGS = [
+  "🎉 今天全天没课！来一场说走就走的……自习",
+  "全天无课！这是本周最好的礼物 🎁",
+  "今天零节课，快乐完全属于自己 🍰",
+  "全天空课，把想做的事排个队吧 📋",
+  "神仙空课日：实验室 / 球场 / 短途旅行 任选 🎢"
+];
+const EGG_SEC_END = { am: 12, pm: 18, eve: 22 };
+function shortEggName(n) { n = String(n || ""); return n.length > 9 ? n.slice(0, 9) + "…" : n; }
 
-function pickEgg(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+/* 上下文：日期差/当前小时/星期/当天节数/明天第一节 → 让彩蛋"认识"你的课表 */
+function buildEggCtx(viewWeek, viewDay, blocks, courses) {
+  const ctx = {
+    dd: null,
+    hour: new Date().getHours(),
+    wd: viewDay % 7,
+    count: blocks.reduce((n, b) => n + (b.p2 - b.p1 + 1), 0),
+    tmrFirst: null
+  };
+  if (viewWeek != null) {
+    const d0 = weekMonday(viewWeek);
+    d0.setDate(d0.getDate() + viewDay - 1);
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    ctx.dd = Math.round((d0 - t0) / 86400000);
+  }
+  if (viewDay < 7) {
+    const list = [];
+    for (const c of courses) {
+      for (const s of (c.sessions || [])) {
+        if (s.day !== viewDay + 1) continue;
+        if (!(s.p1 >= 1 && s.p2 >= s.p1)) continue;
+        list.push({ p1: s.p1, name: c.name });
+      }
+    }
+    list.sort((a, b) => a.p1 - b.p1);
+    ctx.tmrFirst = list[0] || null;
+  }
+  return ctx;
+}
+
+/* 动态彩蛋：按上下文现做，与静态池混合抽取 */
+function dynamicEggs(secId, ctx, blocks) {
+  const out = [];
+  const isToday = ctx.dd === 0, weekend = ctx.wd === 0 || ctx.wd === 6;
+  const hasAm = blocks.some(b => b.p1 <= 4);
+  const hasPm = blocks.some(b => b.p1 >= 5 && b.p1 <= 9);
+  if (secId === "am") {
+    if (hasPm) out.push("课都排在下午，上午睡到自然醒 😴", "上午的空白，是给下午充电的 🛏️");
+    if (weekend) out.push("周末上午没课，快乐自己安排 🎮");
+    if (ctx.wd === 1) out.push("周一上午没课，运气不错 🍀");
+    if (isToday && ctx.hour >= EGG_SEC_END.am && ctx.hour < EGG_SEC_END.pm) out.push("上午已收官，专注眼前 ✅");
+    if (isToday && ctx.hour < 8) out.push("趁早八没来，再睡一会儿 😴");
+    if (ctx.dd > 0) out.push("这一天空档，提前规划点什么？📅");
+  } else if (secId === "pm") {
+    if (hasAm) out.push("课都挤在上午了，下午彻底自由 🎉", "上午满课，下午就当奖励自己 🍦");
+    if (weekend) out.push("周末下午，球场 / 图书馆 / 被窝三选一 🏸");
+    if (ctx.wd === 5) out.push("周五下午没课，提前进入周末模式 🎉");
+    if (isToday && ctx.hour >= EGG_SEC_END.pm && ctx.hour < EGG_SEC_END.eve) out.push("下午已收官，晚上见 ✅");
+    if (ctx.dd > 0) out.push("下午留白，提前安排点什么？📅");
+  } else if (secId === "eve") {
+    if (isToday && ctx.hour >= EGG_SEC_END.eve) out.push("今天 " + ctx.count + " 节课都上完了，晚上是自己的 🍰");
+    if (isToday && ctx.hour >= 23) out.push("这个点了？把精力存给明天 🌙");
+    if (ctx.tmrFirst) out.push("明天第一节是《" + shortEggName(ctx.tmrFirst.name) + "》，今晚别浪太晚 🌙");
+    if (ctx.tmrFirst && ctx.tmrFirst.p1 === 1) out.push("明天有早八，晚饭后就把手机放远点 📵");
+    if (ctx.wd === 0) out.push("周日晚，给新一周充个电 🔋");
+    if (ctx.wd === 5) out.push("周五晚上，一周最后的狂欢 🎉");
+    if (ctx.dd > 0) out.push("晚上留白，提前安排点什么？📅");
+  } else if (secId === "free") {
+    if (weekend) out.push("周末全天没课？这是双倍的快乐 🎉");
+    if (ctx.wd === 5) out.push("周五全天无课，提前过节 🎉");
+    if (ctx.tmrFirst) out.push("明天《" + shortEggName(ctx.tmrFirst.name) + "》见，今天好好逍遥 🍃");
+    if (ctx.dd > 0) out.push("空的一天，留给自己喜欢的事 📋");
+  }
+  return out;
+}
+
+function pickEgg(secId, ctx, blocks) {
+  const base = secId === "free"
+    ? DAY_FREE_EGGS.slice()
+    : (DAY_EGGS[secId] ? DAY_EGGS[secId].slice() : ["这段时间没课，自由安排 🌈", "空档期，适合发呆或冲刺 ✨"]);
+  const pool = base.concat(dynamicEggs(secId, ctx, blocks || []));
+  const key = "kebiao:egg:" + secId;
+  let last = null;
+  try { last = localStorage.getItem(key); } catch (e) {}
+  let pick = pool[Math.floor(Math.random() * pool.length)];
+  for (let i = 0; i < 3 && pick === last && pool.length > 1; i++) {
+    pick = pool[Math.floor(Math.random() * pool.length)];
+  }
+  try { localStorage.setItem(key, pick); } catch (e) {}
+  return pick;
+}
 
 /* 天气码 → 一句话短语（摘要条用） */
 function wmoShort(code) {
@@ -1178,10 +1290,13 @@ function renderDayView(courses) {
   const wxCard = buildWeatherCard();
   if (wxCard) host.appendChild(wxCard);
 
+  /* 彩蛋上下文：日期/时段/星期/节数/明天第一节 */
+  const eggCtx = buildEggCtx(viewWeek, viewDay, blocks, courses);
+
   /* 全天空课: 大彩蛋 */
   if (!blocks.length) {
     const card = el("div", "day-sec");
-    card.appendChild(el("div", "day-free", pickEgg(DAY_FREE_EGGS)));
+    card.appendChild(el("div", "day-free", pickEgg("free", eggCtx, blocks)));
     host.appendChild(card);
     return;
   }
@@ -1197,8 +1312,7 @@ function renderDayView(courses) {
     head.appendChild(tt);
     card.appendChild(head);
     if (!list.length) {
-      const eggs = DAY_EGGS[sec.id] || ["这段时间没课，自由安排 🌈", "空档期，适合发呆或冲刺 ✨"];
-      card.appendChild(el("div", "day-empty", pickEgg(eggs)));
+      card.appendChild(el("div", "day-empty", pickEgg(sec.id, eggCtx, blocks)));
     } else {
       for (const b of list) {
         const blk = el("div", "day-block " + attrClass(b.course.attr));
