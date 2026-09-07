@@ -679,6 +679,7 @@ function showMain() {
   $("main").classList.remove("hidden");
 }
 function showWelcome() {
+  renderIdentity();
   $("main").classList.add("hidden");
   $("schoolPick").classList.add("hidden");
   $("welcome").classList.remove("hidden");
@@ -1903,13 +1904,15 @@ function copyShare(text, tip) {
 }
 
 function shareLink() {
+  const personal = userNo > 0 ? "我是第 " + userNo + " 位课壳人，邀你也来 ✨" : null;
+  const text = (personal ? personal + "\n" : "") + SHARE_TEXT;
   const url = SHARE_URL; /* 纯净链接: QQ/微信卡片缓存复用, 无需重新抓取 */
-  const full = SHARE_TEXT + "\n👉 " + url;
+  const full = text + "\n👉 " + url;
   showModal(`
     <div class="modal-card">
       <h3>推荐「课壳」给同学</h3>
-      <p class="share-hint">微信 / QQ 里会显示卡片 · 文案已备好</p>
-      <div class="share-text">${SHARE_TEXT}
+      <p class="share-hint">微信 / QQ 里会显示卡片 · 文案已备好${personal ? " · 你是第 " + userNo + " 位课壳人" : ""}</p>
+      <div class="share-text">${text}
 👉 ${url}</div>
       <div class="share-actions">
         <button class="sa-main" id="shText">发送文案 + 链接</button>
@@ -1918,7 +1921,7 @@ function shareLink() {
     </div>`);
   $("shText").addEventListener("click", () => {
     if (typeof navigator.share === "function") {
-      navigator.share({ title: "课壳 · 国科大课程表", text: SHARE_TEXT, url }).catch(() => {});
+      navigator.share({ title: "课壳 · 国科大课程表", text: text, url }).catch(() => {});
     } else copyShare(full, "文案已复制，发给同学吧");
   });
   $("shUrl").addEventListener("click", () => copyShare(url, "链接已复制"));
@@ -2612,6 +2615,16 @@ let replyBadge = 0;
 try { replyBadge = Number(localStorage.getItem(REPLY_BADGE_KEY)) || 0; } catch (e) {}
 let replyLatest = null; /* 服务端时间戳：未读回复里最新一条的时间，用作已读游标（免疫本机时钟偏差） */
 try { replyLatest = localStorage.getItem(REPLY_LATEST_KEY); } catch (e) {}
+/* 身份编号：你是第 N 位课壳人（累计设备数，随心跳更新） */
+let userNo = 0;
+try { userNo = Number(localStorage.getItem("kebiao:userno")) || 0; } catch (e) {}
+function renderIdentity() {
+  if (typeof document === "undefined" || !userNo) return;
+  const box = $("welcomeIdentity");
+  if (!box) return;
+  $("idNum").textContent = String(userNo);
+  box.classList.remove("hidden");
+}
 
 function renderReplyBadge() {
   if (typeof document === "undefined") return;
@@ -2653,6 +2666,12 @@ function statsPing() {
             try { localStorage.setItem(REPLY_LATEST_KEY, String(d.latest)); } catch (e) {}
           }
           renderReplyBadge();
+        }
+        /* 身份编号：累计设备数（搭心跳车，零额外调用） */
+        if (d && typeof d.devices === "number" && d.devices > 0) {
+          userNo = d.devices;
+          try { localStorage.setItem("kebiao:userno", String(d.devices)); } catch (e) {}
+          renderIdentity();
         }
       }, () => {});
   } catch (e) {}

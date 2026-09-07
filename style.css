@@ -76,6 +76,8 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
 .welcome { max-width: 560px; margin: 0 auto; padding: 44px 20px 30px; text-align: center; }
 .welcome h1 { font-size: 24px; margin: 0 0 8px; letter-spacing: .5px; }
 .welcome .hint { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+.identity { font-size: 13px; color: var(--muted); margin: -4px 0 14px; }
+.identity b { color: var(--primary); font-weight: 800; font-size: 15px; }
 .welcome textarea {
   width: 100%; min-height: 150px; padding: 12px 14px; border: 1px solid var(--line);
   border-radius: var(--radius); font-size: 16px; font-family: ui-monospace, Menlo, Consolas, monospace;
