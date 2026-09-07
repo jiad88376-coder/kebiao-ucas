@@ -138,10 +138,11 @@ let viewDay = 0;  // 手机端默认聚焦今天(0=全周)；桌面端全周；�
 
 /* ---------------- 云同步 (Supabase, 经反代) ---------------- */
 /* supabase.co 在国内被 GFW 阻断，全部云端流量走免费反代。
-   双源择优: Netlify(海外) + EdgeOne(腾讯边缘, 国内直连快)。
-   启动时并发探测两源，当前源健康则保持；仅当当前源故障或另一源快一倍以上才切换。 */
+   三源择优: CF Worker(自有域名 api.courseshell.cloud, 全球边缘) + Netlify(海外) + EdgeOne(腾讯边缘, 国内直连快)。
+   启动时并发探测各源，当前源健康则保持；仅当当前源故障或另一源快一倍以上才切换。 */
 const SUPABASE_KEY = "sb_publishable_ONe5Ft1rxeRt-rcdruXYoQ_sM0jgwLn";
 const PROXY_SOURCES = [
+  { id: "cf", base: "https://api.courseshell.cloud", path: "" },
   { id: "netlify", base: "https://kebiao-ucas.netlify.app", path: "/.netlify/functions/supabase" },
   { id: "edgeone", base: "https://kebiao-ucas.edgeone.app", path: "/api/supabase" }
 ];
