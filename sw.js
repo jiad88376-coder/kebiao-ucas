@@ -1,5 +1,5 @@
 /* Service Worker: 离线缓存应用外壳 + 课程库 */
-const CACHE = "kebiao-ucas-v21";
+const CACHE = "kebiao-ucas-v22";
 const ASSETS = [
   "./",
   "./index.html",
@@ -53,7 +53,24 @@ self.addEventListener("fetch", (e) => {
     );
     return;
   }
-  /* 大文件（catalog.json / vendor / 图标）：缓存优先，保证打开速度与离线 */
+  /* 课程库：缓存优先 + 后台自愈更新（SWR）——网络抖动导致的坏缓存下次打开自动修复 */
+  if (name === "ucas-catalog.json") {
+    e.respondWith(
+      caches.match(req).then((hit) => {
+        const net = fetch(req).then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        }).catch(() => null);
+        if (hit) return hit;
+        return net.then((res) => res || caches.match("./index.html"));
+      })
+    );
+    return;
+  }
+  /* 大文件（vendor / 图标）：缓存优先，保证打开速度与离线 */
   e.respondWith(
     caches.match(req).then((hit) => {
       if (hit) return hit;
