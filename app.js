@@ -1684,6 +1684,7 @@ function fmtSize(n) {
 
 function showForum(mode, opts) {
   if (!authUser) { promptLogin("登录后才能浏览论坛"); return; }
+  clearReplyBadge(); /* 进论坛即视为已查看，红点消失 */
   opts = opts || {};
   forumCtx = Object.assign({ mode: mode || "list" }, opts);
   $("welcome").classList.add("hidden");
@@ -2095,6 +2096,7 @@ function init() {
   $("btnMore").addEventListener("click", showMoreMenu);
   $("btnTheme").addEventListener("click", cycleTheme);
   applyTheme(themePref());
+  renderReplyBadge(); /* 启动时恢复未读红点（数据随心跳更新） */
 
   /* 周次切换条 */
   $("wkPrev").addEventListener("click", () => {
@@ -2267,7 +2269,29 @@ function chooseSchool(id) {
 }
 
 /* ---------------- 日活统计（零个人信息：随机设备ID + 会话去重 + 服务端按天聚合） ---------------- */
+/* 心跳同时带回"我的帖子有新回复"计数（顺风车，零额外调用），驱动顶栏论坛按钮红点 */
 const DID_KEY = "kebiao:did";
+const REPLY_SEEN_KEY = "kebiao:replyseen";
+const REPLY_BADGE_KEY = "kebiao:replybadge";
+let replyBadge = 0;
+try { replyBadge = Number(localStorage.getItem(REPLY_BADGE_KEY)) || 0; } catch (e) {}
+
+function renderReplyBadge() {
+  if (typeof document === "undefined") return;
+  const b = $("btnForum");
+  if (!b) return;
+  let dot = b.querySelector(".n-dot");
+  if (replyBadge > 0) {
+    if (!dot) { dot = el("span", "n-dot"); b.appendChild(dot); }
+    dot.textContent = replyBadge > 9 ? "9+" : String(replyBadge);
+  } else if (dot) dot.remove();
+}
+function clearReplyBadge() {
+  replyBadge = 0;
+  try { localStorage.setItem(REPLY_BADGE_KEY, "0"); } catch (e) {}
+  try { localStorage.setItem(REPLY_SEEN_KEY, new Date().toISOString()); } catch (e) {}
+  renderReplyBadge();
+}
 function statsPing() {
   if (!supabaseClient || !online()) return;
   try {
@@ -2279,7 +2303,17 @@ function statsPing() {
       did = uid();
       try { localStorage.setItem(DID_KEY, did); } catch (e) {}
     }
-    withFailover((c) => c.rpc("stats_ping", { p_device: did })).then(() => {}, () => {});
+    let since = null;
+    try { since = localStorage.getItem(REPLY_SEEN_KEY); } catch (e) {}
+    withFailover((c) => c.rpc("stats_ping", { p_device: did, p_since: since }))
+      .then((res) => {
+        const d = res && res.data;
+        if (d && typeof d.n === "number") {
+          replyBadge = d.n;
+          try { localStorage.setItem(REPLY_BADGE_KEY, String(d.n)); } catch (e) {}
+          renderReplyBadge();
+        }
+      }, () => {});
   } catch (e) {}
 }
 

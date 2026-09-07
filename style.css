@@ -66,7 +66,10 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
 }
 .ib-ico { font-size: 14px; line-height: 1; }
 .more-ico { font-size: 17px; font-weight: 700; letter-spacing: 1px; margin-top: -3px; }
-.talk-btn { border-color: rgba(47, 111, 237, .45); background: #f0f5ff; color: var(--primary); font-weight: 600; }
+.talk-btn { border-color: rgba(47, 111, 237, .45); background: #f0f5ff; color: var(--primary); font-weight: 600; position: relative; }
+.n-dot { position: absolute; top: -6px; right: -6px; z-index: 5; min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 99px; background: #e5484d; color: #fff; font-size: 10px; line-height: 16px; font-weight: 700;
+  text-align: center; box-shadow: 0 0 0 2px var(--bg); pointer-events: none; }
 .icon-btn:active { background: #eef1f7; }
 
 /* ---------- 欢迎页 ---------- */
