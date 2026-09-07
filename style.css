@@ -143,7 +143,7 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
 
 /* ---------- 主界面 ---------- */
 #main { max-width: 900px; margin: 0 auto; padding: 12px 10px 20px; }
-.searchbar { position: relative; margin-bottom: 10px; }
+.searchbox { position: relative; margin-bottom: 10px; }
 
 .banner {
   margin: 0 2px 10px; padding: 10px 12px; border-radius: 12px; font-size: 13px;
