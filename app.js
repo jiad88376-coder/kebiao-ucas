@@ -1898,6 +1898,20 @@ function showSearchModal() {
   $("msClose").addEventListener("click", hideModal);
 }
 
+/* 赞赏：点页脚"请作者喝杯奶茶"弹码（低调，不打扰任何人） */
+function showSupport() {
+  showModal(`
+    <div class="modal-card support-card">
+      <h3>☕ 请作者喝杯奶茶</h3>
+      <p class="sp-note">课壳永久免费，你的支持是更新的动力</p>
+      <img class="sp-qr" src="./support-qr.jpg" alt="微信赞赏码">
+      <p class="sp-tip">微信扫一扫 · 金额随意 · 留言必回</p>
+      <div class="modal-actions"><button class="cancel" id="spClose">关闭</button></div>
+    </div>`);
+  const c = $("spClose");
+  if (c) c.addEventListener("click", hideModal);
+}
+
 /* ---------------- 更多菜单（论坛/代码/备份收纳于此） ---------------- */
 function showMoreMenu() {
   showModal(`
@@ -2186,6 +2200,9 @@ if (typeof document !== "undefined") {
   });
   /* 点遮罩关闭课程抽屉 */
   $("overlay").addEventListener("click", closeDrawer);
+  /* 页脚赞赏 → 弹赞赏码 */
+  const sp = $("support-link");
+  if (sp) sp.addEventListener("click", (e) => { e.preventDefault(); showSupport(); });
   /* 会话结束兜底推送（关标签页/切后台时把未推送的改动合并上云） */
   window.addEventListener("pagehide", flushPush);
   document.addEventListener("visibilitychange", () => {

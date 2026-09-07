@@ -325,6 +325,11 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
 footer.footnote { text-align: center; margin: 10px 0 26px; }
 #support-link { color: var(--muted, #8a93a6); text-decoration: none; opacity: .75; }
 #support-link:active, #support-link:hover { opacity: 1; color: var(--primary, #3b82f6); }
+.support-card { text-align: center; }
+.sp-note { margin: 2px 0 8px; font-size: 13px; color: #8a93a6; }
+.sp-qr { display: block; width: min(64vw, 240px); margin: 0 auto; border-radius: 14px; }
+.sp-tip { margin: 8px 0 2px; font-size: 12px; color: #8a93a6; }
+[data-theme="dark"] .sp-note, [data-theme="dark"] .sp-tip { color: #9aa4b5; }
 
 /* ---------- 抽屉 ---------- */
 .overlay { position: fixed; inset: 0; background: rgba(15,20,35,.45); z-index: 50; animation: fadeIn .2s ease both; }
