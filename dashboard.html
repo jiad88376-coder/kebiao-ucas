@@ -72,9 +72,9 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
 <main>
   <div class="cards" id="cards"></div>
   <section class="panel">
-    <h2>近 30 天 · 每日打开 / 设备</h2>
+    <h2>近 30 天 · 每日日活</h2>
     <div id="chart"></div>
-    <div class="legend"><span><i class="bar-o"></i>打开次数</span><span><i class="bar-d"></i>独立设备</span></div>
+    <div class="legend"><span><i class="bar-o"></i>独立设备（当日去重）</span></div>
   </section>
   <section class="panel">
     <h2>论坛生态（累计）</h2>
@@ -184,8 +184,8 @@ function card(n, label, hl) {
 function drawChart(days) {
   var W = 720, H = 210, PADL = 8, PADB = 22, PADT = 14;
   var maxV = 1;
-  for (var i = 0; i < days.length; i++) maxV = Math.max(maxV, days[i].opens, days[i].devices);
-  var bw = W / days.length, inner = bw * 0.56;
+  for (var i = 0; i < days.length; i++) maxV = Math.max(maxV, days[i].devices);
+  var bw = W / days.length, barW = Math.min(Math.round(bw * 0.6), 26);
   var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img">';
   var grid = 4, hh = H - PADB - PADT;
   for (var g = 1; g <= grid; g++) {
@@ -193,10 +193,8 @@ function drawChart(days) {
     s += '<line x1="0" y1="' + gy + '" x2="' + W + '" y2="' + gy + '" stroke="var(--line)" stroke-width="1"/>';
   }
   for (var k = 0; k < days.length; k++) {
-    var x = k * bw, ho = Math.round(hh * days[k].opens / maxV), hd = Math.round(hh * days[k].devices / maxV);
-    var barW = Math.min(inner, 18), barD = Math.max(3, barW * 0.42);
-    s += '<rect class="bar-o" x="' + (x + (bw - barW) / 2) + '" y="' + (PADT + hh - ho) + '" width="' + barW + '" height="' + Math.max(ho, days[k].opens ? 2 : 0) + '" rx="3"><title>' + days[k].day + ' 打开 ' + days[k].opens + '</title></rect>';
-    s += '<rect class="bar-d" x="' + (x + (bw - barD) / 2) + '" y="' + (PADT + hh - hd) + '" width="' + barD + '" height="' + Math.max(hd, days[k].devices ? 2 : 0) + '" rx="2"><title>' + days[k].day + ' 设备 ' + days[k].devices + '</title></rect>';
+    var x = k * bw, ho = Math.round(hh * days[k].devices / maxV);
+    s += '<rect class="bar-o" x="' + (x + (bw - barW) / 2) + '" y="' + (PADT + hh - ho) + '" width="' + barW + '" height="' + Math.max(ho, days[k].devices ? 2 : 0) + '" rx="3"><title>' + days[k].day + ' 日活 ' + days[k].devices + '</title></rect>';
     if (k % 5 === 0 || k === days.length - 1) {
       s += '<text class="axis" x="' + (x + bw / 2) + '" y="' + (H - 6) + '" text-anchor="middle">' + days[k].day.slice(5) + '</text>';
     }
