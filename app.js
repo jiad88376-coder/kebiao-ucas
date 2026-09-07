@@ -201,17 +201,26 @@ function online() {
   return typeof navigator === "undefined" || navigator.onLine !== false;
 }
 
-/* 本地修改后 800ms 内合并推送云端（登录状态下）；内容没变就不推 */
+/* 本地修改后推送云端（登录状态下）：10 分钟节流合并 + 离开页面兜底推送；内容没变就不推 */
 function schedulePush() {
   if (!supabaseClient || !authUser || !online()) return;
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(pushToCloud, 800);
+  const wait = Math.max(800, lastPushAt + PUSH_MIN_MS - Date.now());
+  pushTimer = setTimeout(pushToCloud, wait);
+}
+function flushPush() {
+  if (!supabaseClient || !authUser || !online()) return;
+  clearTimeout(pushTimer);
+  if (stateHash() === lastPushedHash) return;
+  try { pushToCloud(); } catch (e) {}
 }
 
 function stateHash() {
   return state.codes.join(",") + "|" + JSON.stringify(state.records);
 }
 let lastPushedHash = null;
+const PUSH_MIN_MS = 10 * 60 * 1000;
+let lastPushAt = 0;
 
 async function pushToCloud() {
   if (!supabaseClient || !authUser || !online()) return;
@@ -225,6 +234,7 @@ async function pushToCloud() {
       updated_at: new Date().toISOString()
     }, { onConflict: "user_id" }));
     lastPushedHash = h;
+    lastPushAt = Date.now();
   } catch (e) { console.warn("push failed", e); }
 }
 
@@ -1730,10 +1740,19 @@ function showMoreMenu() {
     <div class="modal-card">
       <h3>更多</h3>
       <div class="menu-list">
+        <button class="menu-item" id="mmSync"><span class="mi-ico">☁</span><span>立即云备份</span></button>
         <button class="menu-item" id="mmCodes"><span class="mi-ico">⌨️</span><span>粘贴课程代码</span></button>
         <button class="menu-item" id="mmBackup"><span class="mi-ico">⤓</span><span>备份与恢复</span></button>
       </div>
     </div>`);
+  $("mmSync").addEventListener("click", async () => {
+    hideModal();
+    if (!supabaseClient) { toast("云服务未就绪"); return; }
+    if (!authUser) { promptLogin("登录后才能云备份"); return; }
+    if (stateHash() === lastPushedHash) { toast("云端已是最新 ☁"); return; }
+    await pushToCloud();
+    toast(stateHash() === lastPushedHash ? "已备份到云端 ☁" : "备份失败，请稍后重试");
+  });
   $("mmCodes").addEventListener("click", () => { hideModal(); showCodesModal(); });
   $("mmBackup").addEventListener("click", () => { hideModal(); backupModal(); });
 }
@@ -1851,6 +1870,11 @@ if (typeof document !== "undefined") {
   });
   /* 点遮罩关闭课程抽屉 */
   $("overlay").addEventListener("click", closeDrawer);
+  /* 会话结束兜底推送（关标签页/切后台时把未推送的改动合并上云） */
+  window.addEventListener("pagehide", flushPush);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushPush();
+  });
 }
 
 /* ---------------- 论坛 ---------------- */
