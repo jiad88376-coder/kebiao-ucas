@@ -1270,6 +1270,37 @@ function kv(k, v) {
 }
 
 /* ---------------- 笔记 ---------------- */
+/* 笔记图片：浏览器本地 canvas 压缩（长边<=1024, JPEG 75%），零网络调用 */
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      try {
+        const MAX = 1024;
+        let w = img.naturalWidth || 1, h = img.naturalHeight || 1;
+        const s = Math.min(1, MAX / Math.max(w, h));
+        w = Math.max(1, Math.round(w * s));
+        h = Math.max(1, Math.round(h * s));
+        const cv = document.createElement("canvas");
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext("2d");
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h); /* 透明PNG转JPEG不发黑 */
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(cv.toDataURL("image/jpeg", 0.75));
+      } catch (e) { reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("图片读取失败")); };
+    img.src = url;
+  });
+}
+function viewNoteImage(src) {
+  showModal('<div class="modal-card"><img id="nvImg" alt="笔记图片"><div class="modal-actions"><button class="cancel" id="nvClose">关闭</button></div></div>');
+  $("nvImg").src = src;
+  $("nvClose").addEventListener("click", hideModal);
+}
+
 function notesView() {
   const rec = recordsOf(drawerCourse.code);
   const box = el("div");
@@ -1283,7 +1314,47 @@ function notesView() {
   row2.appendChild(titleIn);
   const contentIn = el("textarea"); contentIn.placeholder = "记笔记…";
   bindAutoGrow(contentIn, 300);
+  const pendingImgs = [];
+  const imgRow = el("div", "np-strip hidden");
+  const refreshStrip = () => {
+    imgRow.innerHTML = "";
+    imgRow.classList.toggle("hidden", !pendingImgs.length);
+    for (const d of pendingImgs) {
+      const w = el("div", "np-thumb");
+      const th = el("img"); th.src = d; th.alt = "";
+      w.appendChild(th);
+      const x = el("button", "np-x", "×");
+      x.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const i = pendingImgs.indexOf(d);
+        if (i >= 0) pendingImgs.splice(i, 1);
+        refreshStrip();
+      });
+      w.appendChild(x);
+      imgRow.appendChild(w);
+    }
+  };
+  const fileIn = el("input");
+  fileIn.type = "file"; fileIn.accept = "image/*"; fileIn.multiple = true; fileIn.hidden = true;
+  const picBtn = el("button", "r-btn small ghost", "📷 图片");
+  picBtn.addEventListener("click", () => fileIn.click());
+  fileIn.addEventListener("change", async () => {
+    const room = 6 - pendingImgs.length;
+    const files = Array.from(fileIn.files || []).slice(0, Math.max(0, room));
+    if (!files.length) { toast("每条笔记最多 6 张图片"); fileIn.value = ""; return; }
+    picBtn.disabled = true; picBtn.textContent = "处理中…";
+    for (const f of files) {
+      try { pendingImgs.push(await compressImage(f)); }
+      catch (e) { toast("有图片处理失败，已跳过"); }
+    }
+    picBtn.disabled = false; picBtn.textContent = "📷 图片";
+    fileIn.value = "";
+    refreshStrip();
+  });
   const saveBtn = el("button", "r-btn", "保存笔记");
+  const btnRow = el("div", "f-compose-row");
+  btnRow.appendChild(picBtn);
+  btnRow.appendChild(saveBtn);
   const setEditing = (on) => {
     form.classList.toggle("editing", !!on);
     saveBtn.textContent = on ? "保存修改" : "保存笔记";
@@ -1294,21 +1365,24 @@ function notesView() {
     if (!content) { toast("笔记内容为空"); return; }
     if (noteEditing) {
       const n = rec.notes.find(x => x.id === noteEditing);
-      if (n) { n.date = dateIn.value; n.title = title; n.content = content; }
+      if (n) { n.date = dateIn.value; n.title = title; n.content = content; n.images = pendingImgs.length ? pendingImgs.slice() : undefined; }
       noteEditing = null;
     } else {
-      rec.notes.push({ id: uid(), date: dateIn.value, title, content });
+      rec.notes.push({ id: uid(), date: dateIn.value, title, content, images: pendingImgs.length ? pendingImgs.slice() : undefined });
     }
     saveState();
     setEditing(false);
     dateIn.value = todayStr(); titleIn.value = ""; contentIn.value = "";
+    pendingImgs.length = 0; refreshStrip();
     autoGrow(contentIn, 300);
     renderDrawer();
     toast("已保存");
   });
   form.appendChild(row2);
   form.appendChild(contentIn);
-  form.appendChild(saveBtn);
+  form.appendChild(imgRow);
+  form.appendChild(btnRow);
+  form.appendChild(fileIn);
   box.appendChild(form);
 
   const sorted = [...rec.notes].sort((a, b) => b.date.localeCompare(a.date));
@@ -1325,6 +1399,9 @@ function notesView() {
     edit.addEventListener("click", () => {
       noteEditing = n.id;
       dateIn.value = n.date; titleIn.value = n.title; contentIn.value = n.content;
+      pendingImgs.length = 0;
+      for (const d of (n.images || [])) pendingImgs.push(d);
+      refreshStrip();
       setEditing(true);
       autoGrow(contentIn, 300);
       box.scrollIntoView({ block: "start" });
@@ -1339,6 +1416,16 @@ function notesView() {
     row.appendChild(del);
     item.appendChild(row);
     item.appendChild(el("div", "c", n.content));
+    if (n.images && n.images.length) {
+      const strip = el("div", "note-imgs");
+      for (const d of n.images) {
+        const th = el("img", "note-th");
+        th.src = d; th.alt = "";
+        th.addEventListener("click", () => viewNoteImage(d));
+        strip.appendChild(th);
+      }
+      item.appendChild(strip);
+    }
     box.appendChild(item);
   }
   return box;

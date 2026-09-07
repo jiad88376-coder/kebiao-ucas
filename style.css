@@ -333,6 +333,16 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .r-form input:focus, .r-form select:focus, .r-form textarea:focus { border-color: var(--primary); box-shadow: var(--ring); }
 .r-form textarea { min-height: 74px; resize: none; overflow-y: auto; }
 .r-form.editing { outline: 2px dashed rgba(47, 111, 237, .45); outline-offset: 4px; border-radius: 10px; }
+/* 笔记图片 */
+.np-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+.np-strip.hidden { display: none; }
+.np-thumb { position: relative; width: 56px; height: 56px; border-radius: 9px; overflow: hidden; border: 1px solid var(--line); }
+.np-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.np-x { position: absolute; top: 0; right: 0; width: 18px; height: 18px; padding: 0; border: none;
+  border-radius: 0 0 0 6px; background: rgba(0, 0, 0, .55); color: #fff; font-size: 12px; line-height: 18px; cursor: pointer; }
+.note-imgs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.note-th { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; }
+#nvImg { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 10px; background: #000; }
 .input-count { font-size: 11px; color: var(--muted); text-align: right; line-height: 1.4; }
 .input-count.near { color: #d97a1a; }
 .input-count.over { color: #d23b3b; }
