@@ -674,6 +674,7 @@ function removeCourse(code) {
 
 /* ---------------- 渲染：主界面切换 ---------------- */
 function showMain() {
+  maybeShowInstallBar();
   $("welcome").classList.add("hidden");
   $("schoolPick").classList.add("hidden");
   $("main").classList.remove("hidden");
@@ -1839,10 +1840,16 @@ function showMoreMenu() {
       <h3>更多</h3>
       <div class="menu-list">
         <button class="menu-item" id="mmSync"><span class="mi-ico">☁</span><span>立即云备份</span></button>
+        <button class="menu-item" id="mmInstall"><span class="mi-ico">📲</span><span>安装成手机 App</span></button>
         <button class="menu-item" id="mmCodes"><span class="mi-ico">⌨️</span><span>粘贴课程代码</span></button>
         <button class="menu-item" id="mmBackup"><span class="mi-ico">⤓</span><span>备份与恢复</span></button>
       </div>
     </div>`);
+  $("mmInstall").addEventListener("click", () => {
+    if (isStandalone()) { toast("已经安装过啦，桌面就能找到 📲"); return; }
+    hideModal();
+    showInstallGuide();
+  });
   $("mmSync").addEventListener("click", () => {
     hideModal();
     if (!supabaseClient) { toast("云服务未就绪"); return; }
@@ -1901,6 +1908,59 @@ function copyShare(text, tip) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
   } else fallbackCopy(text, done);
+}
+
+/* ---------------- 安装提醒（PWA）：Android 原生弹窗 / iOS 手动指引，已装不显示，7 天免打扰 ---------------- */
+const INSTALL_KEY = "kebiao:installbar";
+let deferredPrompt = null;
+function isStandalone() {
+  try { return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true; } catch (e) { return false; }
+}
+function installDismissed() {
+  try { const t = Number(localStorage.getItem(INSTALL_KEY)) || 0; return t && Date.now() - t < 7 * 86400e3; } catch (e) { return false; }
+}
+function installHintText() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent)
+    ? "Safari 底部「分享 ⬆️」→ 添加到主屏幕"
+    : "浏览器菜单 →「安装应用 / 添加到主屏幕」";
+}
+function maybeShowInstallBar() {
+  if (typeof document === "undefined") return;
+  if (isStandalone() || installDismissed() || !state.codes.length) return;
+  const bar = $("installBar");
+  if (!bar) return;
+  $("installHow").textContent = installHintText();
+  bar.classList.remove("hidden");
+}
+function showInstallGuide() {
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  showModal(`
+    <div class="modal-card">
+      <h3>📲 把课壳装成 App</h3>
+      <div class="inst-steps">
+        <p>${ios
+          ? "① 用 <b>Safari</b> 打开本页<br>② 点底部中间的「分享 ⬆️」<br>③ 选「<b>添加到主屏幕</b>」→ 添加"
+          : "① 点浏览器右上角「⋮」菜单<br>② 选「<b>安装应用</b>」或「添加到主屏幕」"}</p>
+        <p class="share-hint">${IS_WECHAT
+          ? "微信 / QQ 内无法安装：先点右上角「…」→「在浏览器打开」"
+          : "装好后桌面直达 · 离线也能看课表 · 通知类功能更强"}</p>
+      </div>
+      <div class="modal-actions"><button class="ok" id="igOk">知道了</button></div>
+    </div>`);
+  $("igOk").addEventListener("click", hideModal);
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    maybeShowInstallBar();
+  });
+  window.addEventListener("appinstalled", () => {
+    try { localStorage.setItem(INSTALL_KEY, String(Date.now())); } catch (e) {}
+    const bar = $("installBar");
+    if (bar) bar.classList.add("hidden");
+    toast("安装成功，桌面见 📲");
+  });
 }
 
 function shareLink() {
@@ -2434,6 +2494,22 @@ function init() {
   $("btnTheme").addEventListener("click", cycleTheme);
   applyTheme(themePref());
   renderReplyBadge(); /* 启动时恢复未读红点（数据随心跳更新） */
+  /* 安装提醒条按钮 */
+  $("installGo").addEventListener("click", () => {
+    try { localStorage.setItem(INSTALL_KEY, String(Date.now())); } catch (e) {}
+    $("installBar").classList.add("hidden");
+    if (deferredPrompt) {
+      try { deferredPrompt.prompt(); } catch (e) {}
+      deferredPrompt = null;
+      return;
+    }
+    showInstallGuide();
+  });
+  $("installX").addEventListener("click", () => {
+    try { localStorage.setItem(INSTALL_KEY, String(Date.now())); } catch (e) {}
+    $("installBar").classList.add("hidden");
+    toast("7 天内不再提醒，可在「更多」里随时安装");
+  });
 
   /* 周次切换条 */
   $("wkPrev").addEventListener("click", () => {

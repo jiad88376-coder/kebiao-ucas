@@ -72,6 +72,22 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
   text-align: center; box-shadow: 0 0 0 2px var(--bg); pointer-events: none; }
 .icon-btn:active { background: #eef1f7; }
 
+/* ---------- 安装提醒条 ---------- */
+.install-bar { display: flex; align-items: center; gap: 10px; margin: 10px 12px 0; padding: 10px 12px;
+  border-radius: 13px; background: linear-gradient(135deg, #eef4ff, #e3edff); border: 1px solid rgba(47, 111, 237, .3); }
+.install-bar.hidden { display: none; }
+.ib-ico2 { font-size: 20px; flex: none; }
+.ib-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ib-txt b { font-size: 13.5px; }
+.ib-txt span { font-size: 11.5px; color: var(--muted); }
+#installGo { border: none; background: var(--primary); color: #fff; border-radius: 9px; padding: 8px 14px;
+  font-size: 13px; font-weight: 600; cursor: pointer; flex: none; }
+#installGo:active { transform: scale(.97); }
+.ib-x { border: none; background: none; color: var(--muted); font-size: 17px; padding: 2px 5px; cursor: pointer; flex: none; }
+[data-theme="dark"] .install-bar { background: #182338; border-color: #33508f; }
+[data-theme="dark"] .ib-txt span { color: #8b94a7; }
+.inst-steps p { font-size: 14px; line-height: 1.9; margin: 6px 0; }
+
 /* ---------- 欢迎页 ---------- */
 .welcome { max-width: 560px; margin: 0 auto; padding: 44px 20px 30px; text-align: center; }
 .welcome h1 { font-size: 24px; margin: 0 0 8px; letter-spacing: .5px; }
