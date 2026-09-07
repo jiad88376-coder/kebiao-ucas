@@ -1,5 +1,5 @@
 /* Service Worker: 离线缓存应用外壳 + 课程库 */
-const CACHE = "kebiao-ucas-v23";
+const CACHE = "kebiao-ucas-v24";
 const ASSETS = [
   "./",
   "./index.html",
@@ -11,6 +11,8 @@ const ASSETS = [
   "./data/schools.json",
   "./data/schools/ucas.json",
   "./data/schools/ucas-catalog.json",
+  "./data/schools/hias.json",
+  "./data/schools/hias-catalog.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/apple-touch-icon.png"
@@ -53,8 +55,8 @@ self.addEventListener("fetch", (e) => {
     );
     return;
   }
-  /* 课程库：缓存优先 + 后台自愈更新（SWR）——网络抖动导致的坏缓存下次打开自动修复 */
-  if (name === "ucas-catalog.json") {
+  /* 课程库：缓存优先 + 后台自愈更新（SWR）——网络抖动导致的坏缓存下次打开自动修复（所有学校的课程库通用） */
+  if (name.endsWith("-catalog.json")) {
     e.respondWith(
       caches.match(req).then((hit) => {
         const net = fetch(req).then((res) => {
