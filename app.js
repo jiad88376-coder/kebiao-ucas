@@ -1881,18 +1881,37 @@ function showCodesModal() {
   $("codesCancel").addEventListener("click", hideModal);
 }
 
+/* 搜索添加课程（弹窗式）：主界面撤掉常驻搜索条后从这里进，绑定随弹窗重建 */
+function showSearchModal() {
+  showModal(`
+    <div class="modal-card">
+      <h3>🔍 添加课程</h3>
+      <div class="searchbox" style="margin:0 0 6px">
+        <input id="msInput" placeholder="搜索课程名称 / 课程代码…" autocomplete="off">
+        <div id="msSug" class="suggestions"></div>
+      </div>
+      <p class="share-hint">也可在「更多 → 粘贴课程代码」批量导入</p>
+      <div class="modal-actions"><button class="cancel" id="msClose">关闭</button></div>
+    </div>`);
+  bindSearch($("msInput"), $("msSug"), () => { hideModal(); toast("已添加到课表"); });
+  $("msInput").focus();
+  $("msClose").addEventListener("click", hideModal);
+}
+
 /* ---------------- 更多菜单（论坛/代码/备份收纳于此） ---------------- */
 function showMoreMenu() {
   showModal(`
     <div class="modal-card">
       <h3>更多</h3>
       <div class="menu-list">
+        <button class="menu-item" id="mmSearch"><span class="mi-ico">🔍</span><span>添加课程（搜索）</span></button>
         <button class="menu-item" id="mmSync"><span class="mi-ico">☁</span><span>立即云备份</span></button>
         <button class="menu-item" id="mmInstall"><span class="mi-ico">📲</span><span>安装成手机 App</span></button>
         <button class="menu-item" id="mmCodes"><span class="mi-ico">⌨️</span><span>粘贴课程代码</span></button>
         <button class="menu-item" id="mmBackup"><span class="mi-ico">⤓</span><span>备份与恢复</span></button>
       </div>
     </div>`);
+  $("mmSearch").addEventListener("click", () => { hideModal(); showSearchModal(); });
   $("mmInstall").addEventListener("click", () => {
     if (isStandalone()) { toast("已经安装过啦，桌面就能找到 📲"); return; }
     hideModal();
@@ -2609,7 +2628,6 @@ async function downloadForumFile(p) {
 /* ---------------- 初始化 ---------------- */
 function init() {
   loadState();
-  bindSearch($("searchInput"), $("suggestions"));
   const generate = () => {
     const raw = parseCodes($("codeInput").value);
     if (!raw.length) { toast("请先粘贴课程代码"); return; }
