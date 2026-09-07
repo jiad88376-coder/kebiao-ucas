@@ -1929,6 +1929,7 @@ async function loadFiles() {
     meta.appendChild(el("span", "", fmtTime(p.created_at)));
     if (p.course_code && courseMap[p.course_code]) {
       const tag = el("span", "f-tag", courseMap[p.course_code].name);
+      tag.title = courseMap[p.course_code].name;
       tag.addEventListener("click", () => showForum("files", { course: p.course_code }));
       meta.appendChild(tag);
     }
@@ -2336,6 +2337,7 @@ function renderForumPosts(posts) {
     /* 课程标签 + 附件角标 */
     if (p.course_code && courseMap[p.course_code]) {
       const tag = el("span", "f-tag", courseMap[p.course_code].name);
+      tag.title = courseMap[p.course_code].name;
       tag.addEventListener("click", (ev) => {
         ev.stopPropagation();
         showForum("list", { course: p.course_code });
@@ -2429,6 +2431,7 @@ function renderForumPost(id, post, replies) {
   main.appendChild(el("div", "f-title", post.title));
   if (post.course_code && courseMap[post.course_code]) {
     const tag = el("span", "f-tag", "🏷 " + courseMap[post.course_code].name);
+    tag.title = courseMap[post.course_code].name;
     tag.addEventListener("click", () => showForum("list", { course: post.course_code }));
     main.appendChild(tag);
   }

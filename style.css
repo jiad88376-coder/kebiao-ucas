@@ -553,7 +553,7 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
   padding: 12px 13px; cursor: pointer; transition: filter .15s, border-color .15s, box-shadow .15s; }
 .f-card:active { filter: brightness(.96); }
 .f-title { font-size: 15px; font-weight: 700; line-height: 1.4; }
-.f-tag { display: inline-flex; align-items: center; max-width: 9em; vertical-align: middle;
+.f-tag { display: inline-flex; align-items: center; max-width: 18em; vertical-align: middle;
   margin-left: 6px; padding: 1.5px 8px; border-radius: 99px; font-size: 11px; font-weight: 500;
   color: var(--primary); background: rgba(47, 111, 237, .09); border: 1px solid rgba(47, 111, 237, .28);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
