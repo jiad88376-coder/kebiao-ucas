@@ -214,6 +214,15 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
 /* ---------- 逐小时天气条 ---------- */
 .wx-strip { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
 .wx-strip::-webkit-scrollbar { display: none; }
+/* 智能摘要条：默认只占一行，课程优先；点击展开逐小时 */
+.wx-mini { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 10px;
+  background: rgba(47, 111, 237, .07); border: 1px solid rgba(47, 111, 237, .2); cursor: pointer; }
+.wx-mini:active { background: rgba(47, 111, 237, .14); }
+.wxm-i { font-size: 17px; flex: none; }
+.wxm-t { font-weight: 800; font-size: 15px; flex: none; }
+.wxm-chg { flex: 1; min-width: 0; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wxm-x { flex: none; color: var(--primary); font-size: 11.5px; font-weight: 600; }
+.day-wx.closed .wx-strip { display: none; }
 .wx-h {
   flex: none; min-width: 46px; padding: 7px 4px; border-radius: 9px;
   display: flex; flex-direction: column; align-items: center; gap: 3px;

@@ -943,6 +943,21 @@ const DAY_FREE_EGGS = ["🎉 今天全天没课！来一场说走就走的……
 
 function pickEgg(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
+/* 天气码 → 一句话短语（摘要条用） */
+function wmoShort(code) {
+  if (code === 0) return "晴";
+  if (code === 1 || code === 2) return "多云";
+  if (code === 3) return "阴";
+  if (code === 45 || code === 48) return "雾";
+  if (code >= 51 && code <= 57) return "毛毛雨";
+  if (code >= 61 && code <= 67) return "雨";
+  if (code >= 71 && code <= 77) return "雪";
+  if (code >= 80 && code <= 82) return "阵雨";
+  if (code === 85 || code === 86) return "阵雪";
+  if (code >= 95) return "雷雨";
+  return "变天";
+}
+
 /* ---------------- 逐小时天气（Open-Meteo, 免密钥; 按当天课程所在校区取坐标） ---------------- */
 const WX_CACHE_KEY = "kebiao:wx:v1";
 let wxMem = null;
@@ -1012,7 +1027,10 @@ function buildWeatherCard() {
   const dd = Math.round((wxDate - today0) / 86400000);
   if (dd < 0 || dd > 6) return null;
 
-  const card = el("div", "day-sec day-wx");
+  /* 默认收起为单行摘要（课程优先），点击展开逐小时；偏好记忆 */
+  let open = false;
+  try { open = localStorage.getItem("kebiao:wxopen") === "1"; } catch (e) {}
+  const card = el("div", "day-sec day-wx" + (open ? "" : " closed"));
   const head = el("div", "day-sec-head");
   head.appendChild(el("span", "day-sec-icon", "🌤"));
   const tt = el("div", "day-sec-title");
@@ -1021,14 +1039,25 @@ function buildWeatherCard() {
   tt.appendChild(el("span", "day-sec-time", "逐小时" + (cc && CAMPUS_NAME[cc] ? " · " + CAMPUS_NAME[cc] : "")));
   head.appendChild(tt);
   card.appendChild(head);
+  const mini = el("div", "wx-mini");
+  mini.appendChild(el("span", "wxm-i", "🌤"));
+  mini.appendChild(el("span", "wxm-t", "天气加载中…"));
+  const mx = el("span", "wxm-x", open ? "收起 ▴" : "展开 ▾");
+  mini.appendChild(mx);
+  mini.addEventListener("click", () => {
+    const nowClosed = card.classList.toggle("closed");
+    mx.textContent = nowClosed ? "展开 ▾" : "收起 ▴";
+    try { localStorage.setItem("kebiao:wxopen", nowClosed ? "0" : "1"); } catch (e) {}
+  });
+  card.appendChild(mini);
   const strip = el("div", "wx-strip");
   strip.appendChild(el("div", "wx-none", "天气加载中…"));
   card.appendChild(strip);
-  fillWeatherCard(strip, wxDate, dd);
+  fillWeatherCard(strip, mini, card, wxDate, dd);
   return card;
 }
 
-async function fillWeatherCard(strip, date, dd) {
+async function fillWeatherCard(strip, mini, card, date, dd) {
   const coords = weatherCoords();
   if (!coords) { strip.innerHTML = ""; strip.appendChild(el("div", "wx-none", "暂无天气数据")); return; }
   try {
@@ -1037,26 +1066,45 @@ async function fillWeatherCard(strip, date, dd) {
     const H = data.hourly;
     const ds = date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
     const nowH = new Date().getHours();
-    strip.innerHTML = "";
-    let centerEl = null;
+    const items = [];
     for (let i = 0; i < H.time.length; i++) {
       if (!H.time[i].startsWith(ds)) continue;
       const hh = Number(H.time[i].slice(11, 13));
       if (dd === 0 && hh < nowH) continue; // 今天只显示未过去的时段
-      const isNow = hh === nowH; // 任意天都标出当前小时
+      items.push({ hh, code: H.weather_code[i], temp: Math.round(H.temperature_2m[i]), pop: H.precipitation_probability ? H.precipitation_probability[i] : null });
+    }
+    /* 摘要条：当前温度 + 第一处显著变化 */
+    mini.innerHTML = "";
+    if (items.length) {
+      const now = items[0];
+      mini.appendChild(el("span", "wxm-i", wmoIcon(now.code)));
+      mini.appendChild(el("span", "wxm-t", now.temp + "°"));
+      let chg = "全天天气稳定";
+      for (const it of items.slice(1)) {
+        if (it.code !== now.code) { chg = it.hh + "时起" + wmoShort(it.code) + "（→" + it.temp + "°）"; break; }
+      }
+      mini.appendChild(el("span", "wxm-chg", chg));
+      mini.appendChild(el("span", "wxm-x", card.classList.contains("closed") ? "展开 ▾" : "收起 ▴"));
+    } else {
+      mini.appendChild(el("span", "wxm-i", "🌤"));
+      mini.appendChild(el("span", "wxm-t", "暂无预报"));
+    }
+    strip.innerHTML = "";
+    let centerEl = null;
+    for (const it of items) {
+      const isNow = it.hh === nowH; // 任意天都标出当前小时
       const item = el("div", "wx-h" + (isNow ? " wx-now" : ""));
-      item.appendChild(el("span", "wx-t", isNow && dd === 0 ? "现在" : hh + "时"));
-      item.appendChild(el("span", "wx-i", wmoIcon(H.weather_code[i])));
-      item.appendChild(el("span", "wx-d", Math.round(H.temperature_2m[i]) + "°"));
-      const p = H.precipitation_probability ? H.precipitation_probability[i] : null;
-      item.appendChild(el("span", "wx-p", p != null && p >= 20 ? "💧" + p + "%" : ""));
+      item.appendChild(el("span", "wx-t", isNow && dd === 0 ? "现在" : it.hh + "时"));
+      item.appendChild(el("span", "wx-i", wmoIcon(it.code)));
+      item.appendChild(el("span", "wx-d", it.temp + "°"));
+      item.appendChild(el("span", "wx-p", it.pop != null && it.pop >= 20 ? "💧" + it.pop + "%" : ""));
       strip.appendChild(item);
       if (isNow) centerEl = item;                    // 当前小时始终居中
-      else if (!centerEl && dd > 0 && hh === 12) centerEl = item; // 兜底: 未来日中午
+      else if (!centerEl && dd > 0 && it.hh === 12) centerEl = item; // 兜底: 未来日中午
     }
     if (!strip.children.length) {
       strip.appendChild(el("div", "wx-none", "暂无预报"));
-    } else if (centerEl) {
+    } else if (centerEl && !card.classList.contains("closed")) {
       /* 双 rAF 确保布局就绪后再居中; scrollIntoView 失败退回手动计算 */
       requestAnimationFrame(() => requestAnimationFrame(() => {
         try {
