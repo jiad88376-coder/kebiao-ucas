@@ -567,6 +567,15 @@ function effTeacher(course, s, dateStr) {
   const tw = effTweak(course.code, s, dateStr);
   return (tw && tw.teacher) || course.teacher;
 }
+/* 时间覆盖（星期/节次）：单日 > 学期，只影响本地自己的显示 */
+function effSlot(code, s, dateStr) {
+  const tw = effTweak(code, s, dateStr) || {};
+  return {
+    day: Number.isInteger(tw.day) ? tw.day : s.day,
+    p1: Number.isInteger(tw.p1) ? tw.p1 : s.p1,
+    p2: Number.isInteger(tw.p2) ? tw.p2 : s.p2
+  };
+}
 
 /* ---------------- DOM 工具 ---------------- */
 const $ = (id) => document.getElementById(id);
@@ -815,7 +824,18 @@ function renderGrid() {
   /* 单日视图: 模块化 上午/下午/晚上 三卡片 */
   if (viewDay) { renderDayView(courses); return; }
 
-  const conflicts = findConflicts(courses);
+  /* 完整日期（周一..周日，供单日级微调查找；全部周次模式无日期 → 只用学期级） */
+  let fullDates = null;
+  if (viewWeek != null) {
+    fullDates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = weekMonday(viewWeek); d.setDate(d.getDate() + i);
+      fullDates.push(dateStrOf(d));
+    }
+  }
+  const slotDate = (s) => (fullDates ? fullDates[s.day - 1] : null);
+  /* 冲突按「调整后」的时段计算（时间微调后不再误报） */
+  const conflicts = findConflicts(courses.map(c => ({ ...c, sessions: c.sessions.map(s => Object.assign({}, s, effSlot(c.code, s, slotDate(s)))) })));
   /* 冲突时段映射: "day-p1-p2" -> true */
   const conflictSess = new Set();
   for (const cf of conflicts) for (const p of cf.pairs) {
@@ -841,13 +861,14 @@ function renderGrid() {
   const placed = new Set();
   for (const c of courses) {
     for (const s of c.sessions) {
-      if (!(s.day >= 1 && s.day <= 7 && s.p1 >= 1 && s.p2 >= s.p1 && s.p2 <= maxP)) continue;
-      const key = `${c.code}|${s.day}|${s.p1}|${s.p2}|${s.weeks}`;
+      const es = effSlot(c.code, s, slotDate(s));
+      if (!(es.day >= 1 && es.day <= 7 && es.p1 >= 1 && es.p2 >= es.p1 && es.p2 <= maxP)) continue;
+      const key = `${c.code}|${es.day}|${es.p1}|${es.p2}|${s.weeks}`;
       if (placed.has(key)) continue;
       placed.add(key);
-      const span = s.p2 - s.p1 + 1;
-      const sk = `${s.p1}-${s.day}`;
-      (starts[sk] = starts[sk] || []).push({ course: c, session: s, span });
+      const span = es.p2 - es.p1 + 1;
+      const sk = `${es.p1}-${es.day}`;
+      (starts[sk] = starts[sk] || []).push({ course: c, session: es, orig: s, span });
     }
   }
   /* 列内防重叠：同一列后开始的块截断前面块的跨行数，避免表格错位 */
@@ -899,7 +920,7 @@ function renderGrid() {
       if (list && list.length) {
         td.rowSpan = list[0].span;
         for (const gc of list) {
-          const block = buildCourseBlock(gc.course, gc.session, conflictSess, viewWeek != null, weekDates ? weekDates[d - 1] : null);
+          const block = buildCourseBlock(gc.course, gc.session, conflictSess, viewWeek != null, weekDates ? weekDates[d - 1] : null, gc.orig);
           block.addEventListener("click", () => openDrawer(gc.course.code));
           td.appendChild(block);
         }
@@ -1249,6 +1270,7 @@ function renderDayView(courses) {
     d0.setDate(d0.getDate() + viewDay - 1);
     dvDate = dateStrOf(d0);
   }
+  const wkMon = viewWeek != null ? weekMonday(viewWeek) : null;
   let host = $("dayview");
   if (!host) {
     host = el("div");
@@ -1265,12 +1287,16 @@ function renderDayView(courses) {
   const sess = [];
   for (const c of courses) {
     for (const s of (c.sessions || [])) {
-      if (s.day !== day) continue;
-      if (!(s.p1 >= 1 && s.p2 >= s.p1 && s.p2 <= maxP)) continue;
-      const key = c.code + "|" + s.p1 + "|" + s.p2 + "|" + s.weeks;
+      /* 该时段在本视图周的"自然日期"（单日级微调按这个日期查找） */
+      let sDate = null;
+      if (wkMon) { const d = new Date(wkMon); d.setDate(d.getDate() + s.day - 1); sDate = dateStrOf(d); }
+      const es = effSlot(c.code, s, sDate);
+      if (es.day !== day) continue;
+      if (!(es.p1 >= 1 && es.p2 >= es.p1 && es.p2 <= maxP)) continue;
+      const key = c.code + "|" + es.p1 + "|" + es.p2 + "|" + s.weeks;
       if (placed.has(key)) continue;
       placed.add(key);
-      sess.push({ course: c, p1: s.p1, p2: s.p2, room: effRoom(c, s, dvDate), teacher: effTeacher(c, s, dvDate), tw: !!effTweak(c.code, s, dvDate) });
+      sess.push({ course: c, p1: es.p1, p2: es.p2, room: effRoom(c, s, sDate), teacher: effTeacher(c, s, sDate), tw: !!effTweak(c.code, s, sDate) });
     }
   }
   sess.sort((a, b) => a.p1 - b.p1 || a.p2 - b.p2);
@@ -1331,14 +1357,15 @@ function renderDayView(courses) {
 }
 
 /* 课程块：课程名 / 教师·教室 / 周次（对齐 Excel 版）；周视图下不重复显示周次 */
-function buildCourseBlock(course, session, conflictSess, weekView, dateStr) {
+function buildCourseBlock(course, session, conflictSess, weekView, dateStr, orig) {
+  orig = orig || session; /* 微调查找键用原始时段，day/p1/p2 用生效时段 */
   const isConflict = conflictSess.has(`${session.day}-${session.p1}-${session.p2}`);
   const block = el("div", "course-cell " + attrClass(course.attr) + (isConflict ? " conflict" : ""));
   block.appendChild(el("div", "cc-name", course.name));
-  const tw = effTweak(course.code, session, dateStr);
+  const tw = effTweak(course.code, orig, dateStr);
   const meta = [];
-  const teacher = effTeacher(course, session, dateStr);
-  const room = effRoom(course, session, dateStr);
+  const teacher = effTeacher(course, orig, dateStr);
+  const room = effRoom(course, orig, dateStr);
   if (teacher) meta.push(teacher);
   if (room) meta.push(room);
   if (meta.length) block.appendChild(el("div", "cc-meta", meta.join(" · ") + (tw ? " ✎" : "")));
@@ -1455,7 +1482,9 @@ function renderDrawer() {
     const ss = el("div", "dr-sessions");
     ss.appendChild(el("div", "", "上课时间："));
     for (const s of c.sessions) {
-      ss.appendChild(el("div", "s", `${fmtSession(s)} · ${s.weeks}${s.room ? " · " + s.room : ""}`));
+      const es = effSlot(c.code, s, null);
+      const room = effRoom(c, s, null);
+      ss.appendChild(el("div", "s", `${DAY_NAMES[es.day - 1]} 第${es.p1}${es.p2 > es.p1 ? "-" + es.p2 : ""}节 · ${s.weeks}${room ? " · " + room : ""}`));
     }
     d.appendChild(ss);
   } else {
@@ -1517,12 +1546,19 @@ function showTweakModal(code) {
   }
   const modalCard = el("div", "modal-card");
   modalCard.appendChild(el("h3", "", "📍 调整上课信息"));
-  modalCard.appendChild(el("p", "share-hint", "仅修改你课表里的显示，不影响任何人。可选「整个学期」或「仅某一天」（临时换教室）。"));
+  modalCard.appendChild(el("p", "share-hint", "仅修改你课表里的显示，不影响任何人。可调整地点 / 教师 / 上课时间（星期与节次），可选「整个学期」或「仅某一天」。"));
   const list = el("div", "tk-list");
   for (const s of slots) {
     const tw = tweakOf(code, s);
+    let slotLabel = DAY_NAMES[s.day - 1] + " 第" + s.p1 + (s.p2 > s.p1 ? "-" + s.p2 : "") + "节";
+    if (tw && (Number.isInteger(tw.day) || Number.isInteger(tw.p1))) {
+      const d = Number.isInteger(tw.day) ? tw.day : s.day;
+      const a = Number.isInteger(tw.p1) ? tw.p1 : s.p1;
+      const b = Number.isInteger(tw.p2) ? tw.p2 : s.p2;
+      slotLabel += " → " + DAY_NAMES[d - 1] + " 第" + a + (b > a ? "-" + b : "") + "节";
+    }
     const row = el("div", "tk-row");
-    row.appendChild(el("span", "tk-slot", DAY_NAMES[s.day - 1] + " 第" + s.p1 + (s.p2 > s.p1 ? "-" + s.p2 : "") + "节"));
+    row.appendChild(el("span", "tk-slot", slotLabel));
     row.appendChild(el("span", "tk-room", (effRoom(c, s) || "（无地点）") + (tw ? " ✎" : "")));
     const b = el("button", "r-btn small", "修改");
     b.addEventListener("click", () => editTweakSlot(code, s));
@@ -1545,7 +1581,14 @@ function showTweakModal(code) {
           const row = el("div", "tk-row");
           row.appendChild(el("span", "tk-slot", ds.slice(5) + " " + DAY_NAMES[dayIdx - 1].slice(1)));
           const twd = rec.tweaksByDate[ds][k] || {};
-          row.appendChild(el("span", "tk-room", (twd.room || "（恢复默认地点）") + " ✎"));
+          let lbl = twd.room || "（恢复默认地点）";
+          if (Number.isInteger(twd.day) || Number.isInteger(twd.p1)) {
+            const d = Number.isInteger(twd.day) ? twd.day : dayIdx;
+            const a = Number.isInteger(twd.p1) ? twd.p1 : "";
+            const b = Number.isInteger(twd.p2) ? twd.p2 : "";
+            lbl = "时间 → " + DAY_NAMES[d - 1] + " 第" + a + (b && b > a ? "-" + b : "") + "节" + (twd.room ? " · " + twd.room : "");
+          }
+          row.appendChild(el("span", "tk-room", lbl + " ✎"));
           const x = el("button", "r-btn small danger", "删除");
           x.addEventListener("click", () => {
             delete rec.tweaksByDate[ds][k];
@@ -1579,6 +1622,9 @@ function editTweakSlot(code, s) {
     <div class="modal-card">
       <h3>${DAY_NAMES[s.day - 1]} 第${s.p1}${s.p2 > s.p1 ? "-" + s.p2 : ""}节</h3>
       <div class="r-form">
+        <select id="twDay"></select>
+        <select id="twP1"></select>
+        <select id="twP2"></select>
         <input id="twRoom" maxlength="30" placeholder="上课地点（如：教一楼 302）">
         <input id="twTeacher" maxlength="30" placeholder="教师（可选，留空用默认）">
         <select id="twScope">
@@ -1595,6 +1641,26 @@ function editTweakSlot(code, s) {
     </div>`);
   $("twRoom").value = tw.room || dtw.room || "";
   $("twTeacher").value = tw.teacher || dtw.teacher || "";
+  /* 时间下拉：星期 + 起止节（"不变"=不调整） */
+  const maxP = Math.max.apply(null, Object.keys(PERIOD_TIMES).map(Number));
+  const daySel = $("twDay"), p1Sel = $("twP1"), p2Sel = $("twP2");
+  daySel.appendChild(new Option("星期不变", ""));
+  for (let i = 1; i <= 7; i++) daySel.appendChild(new Option(DAY_NAMES[i - 1], String(i)));
+  p1Sel.appendChild(new Option("开始节不变", ""));
+  p2Sel.appendChild(new Option("结束节不变", ""));
+  for (let p = 1; p <= maxP; p++) {
+    p1Sel.appendChild(new Option("第" + p + "节", String(p)));
+    p2Sel.appendChild(new Option("第" + p + "节", String(p)));
+  }
+  const cur = {};
+  for (const src of [tw, dtw]) {
+    if (Number.isInteger(src.day)) cur.day = src.day;
+    if (Number.isInteger(src.p1)) cur.p1 = src.p1;
+    if (Number.isInteger(src.p2)) cur.p2 = src.p2;
+  }
+  if (Number.isInteger(cur.day)) daySel.value = String(cur.day);
+  if (Number.isInteger(cur.p1)) p1Sel.value = String(cur.p1);
+  if (Number.isInteger(cur.p2)) p2Sel.value = String(cur.p2);
   const dateIn = $("twDate");
   dateIn.value = defDate;
   $("twScope").addEventListener("change", () => {
@@ -1607,10 +1673,20 @@ function editTweakSlot(code, s) {
     const isDate = $("twScope").value === "date";
     const dateStr = isDate ? $("twDate").value : null;
     if (isDate && !dateStr) { toast("请选择日期"); return; }
+    const dayV = daySel.value === "" ? null : parseInt(daySel.value, 10);
+    const p1v = p1Sel.value === "" ? null : parseInt(p1Sel.value, 10);
+    const p2v = p2Sel.value === "" ? null : parseInt(p2Sel.value, 10);
+    if ((p1v == null) !== (p2v == null)) { toast("开始节和结束节要一起设置"); return; }
+    if (p1v != null && p1v > p2v) { toast("结束节不能早于开始节"); return; }
+    if (dayV != null && !(dayV >= 1 && dayV <= 7)) { toast("星期不合法"); return; }
     const rec = recordsOf(code);
     const k = sessKey(s);
-    const val = Object.assign({}, room ? { room } : {}, teacher ? { teacher } : {});
-    const same = room === (s.room || "") && teacher === (c.teacher || "");
+    const time = {};
+    if (dayV != null) time.day = dayV;
+    if (p1v != null) { time.p1 = p1v; time.p2 = p2v; }
+    const val = Object.assign({}, room ? { room } : {}, teacher ? { teacher } : {}, time);
+    const noTime = !time.day && !time.p1;
+    const same = room === (s.room || "") && teacher === (c.teacher || "") && noTime;
     if (isDate) {
       if (!rec.tweaksByDate) rec.tweaksByDate = {};
       if (!rec.tweaksByDate[dateStr]) rec.tweaksByDate[dateStr] = {};
@@ -1625,7 +1701,9 @@ function editTweakSlot(code, s) {
     saveState();
     hideModal();
     render();
-    toast(same ? "已恢复该节默认信息" : isDate ? "已保存（仅 " + dateStr.slice(5) + " 生效）" : "已保存，全学期生效");
+    toast(same ? "已恢复该节默认信息"
+      : !noTime ? (isDate ? "时间已调整（仅 " + dateStr.slice(5) + " 生效）" : "时间已调整，全学期生效")
+      : (isDate ? "已保存（仅 " + dateStr.slice(5) + " 生效）" : "已保存，全学期生效"));
     showTweakModal(code);
   });
   $("twReset").addEventListener("click", () => {

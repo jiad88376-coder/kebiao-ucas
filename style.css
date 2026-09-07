@@ -380,7 +380,7 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .r-form.editing { outline: 2px dashed rgba(47, 111, 237, .45); outline-offset: 4px; border-radius: 10px; }
 /* 调整上课信息 */
 .tk-list { display: flex; flex-direction: column; max-height: 46vh; overflow-y: auto; }
-.tk-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+.tk-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 13px; flex-wrap: wrap; }
 .tk-slot { font-weight: 600; flex: none; }
 .tk-room { flex: 1; min-width: 0; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tk-sub { margin-top: 10px; }
