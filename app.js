@@ -2103,6 +2103,36 @@ function showSupport() {
   if (c) c.addEventListener("click", hideModal);
 }
 
+/* 感谢名单：微信赞赏码没有查询接口，作者在微信里核对记录后手动维护 THANKS 数组 */
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (ch) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+const THANKS = [
+  // { name: "昵称", amount: "¥10", date: "2026-09-08", msg: "留言（可省略）" },
+];
+
+function showThanks() {
+  const rows = THANKS.map((t) =>
+    '<div class="thx-row"><span class="n">' + esc(t.name) + '</span>' +
+    (t.msg ? '<span class="m">' + esc(t.msg) + '</span>' : '') +
+    (t.amount ? '<span class="a">' + esc(t.amount) + '</span>' : '') +
+    (t.date ? '<span class="d">' + esc(t.date) + '</span>' : '') +
+    '</div>').join("");
+  const body = rows ||
+    '<div class="thx-empty">名单虚位以待<br>赞赏时留言你的昵称，就会出现在这里</div>';
+  showModal(`
+    <div class="modal-card thanks-card">
+      <h3>🙏 感谢名单</h3>
+      <div class="thx-list">${body}</div>
+      <p class="thx-foot">名单由作者定期在微信核对赞赏记录后更新 · 打赏不留名也可以</p>
+      <div class="modal-actions"><button class="cancel" id="thClose">关闭</button></div>
+    </div>`);
+  const c = $("thClose");
+  if (c) c.addEventListener("click", hideModal);
+}
+
 /* ---------------- 更多菜单（论坛/代码/备份收纳于此） ---------------- */
 function showMoreMenu() {
   showModal(`
@@ -2391,9 +2421,11 @@ if (typeof document !== "undefined") {
   });
   /* 点遮罩关闭课程抽屉 */
   $("overlay").addEventListener("click", closeDrawer);
-  /* 页脚赞赏 → 弹赞赏码 */
+  /* 页脚赞赏/感谢名单 → 对应弹窗 */
   const sp = $("support-link");
   if (sp) sp.addEventListener("click", (e) => { e.preventDefault(); showSupport(); });
+  const thl = $("thanks-link");
+  if (thl) thl.addEventListener("click", (e) => { e.preventDefault(); showThanks(); });
   /* 会话结束兜底推送（关标签页/切后台时把未推送的改动合并上云） */
   window.addEventListener("pagehide", flushPush);
   document.addEventListener("visibilitychange", () => {
