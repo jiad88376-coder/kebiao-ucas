@@ -1761,25 +1761,26 @@ function renderDrawer() {
   if (drawerTab === "exams") body.appendChild(examsView());
   d.appendChild(body);
 
+  /* 底部操作区：三等分主操作 + 通栏危险操作 */
+  const actions = el("div", "dr-actions");
   const alarmBtn = el("button", "r-btn", "🔔 上课提醒");
   alarmBtn.addEventListener("click", () => showAlarmModal(c.code));
-  d.appendChild(alarmBtn);
-
-  const tweakBtn = el("button", "r-btn ghost", "📍 调整上课信息");
+  const tweakBtn = el("button", "r-btn ghost", "📍 调整信息");
   tweakBtn.addEventListener("click", () => {
     closeDrawer();
     showTweakModal(c.code);
   });
-  d.appendChild(tweakBtn);
-
-  const forumBtn = el("button", "r-btn ghost", "💬 去讨论区提问");
+  const forumBtn = el("button", "r-btn ghost", "💬 讨论区");
   forumBtn.addEventListener("click", () => {
     closeDrawer();
     showForum("list", { course: c.code });
   });
-  d.appendChild(forumBtn);
+  actions.appendChild(alarmBtn);
+  actions.appendChild(tweakBtn);
+  actions.appendChild(forumBtn);
+  d.appendChild(actions);
 
-  const delBtn = el("button", "r-btn danger", "从课表移除这门课");
+  const delBtn = el("button", "r-btn danger dr-danger", "从课表移除这门课");
   delBtn.addEventListener("click", () => { closeDrawer(); removeCourse(c.code); });
   d.appendChild(delBtn);
 }

@@ -404,6 +404,10 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .dr-info .v { font-weight: 500; }
 .dr-sessions { font-size: 13px; background: #f7f9fc; border-radius: 10px; padding: 8px 12px; margin-bottom: 12px; }
 .dr-sessions .s { margin: 3px 0; }
+/* 抽屉底部操作区：三个主操作等宽一行，危险操作通栏置底 */
+.dr-actions { display: flex; gap: 8px; margin-top: 2px; }
+.dr-actions .r-btn { flex: 1; min-width: 0; padding: 10px 4px; font-size: 13px; white-space: nowrap; }
+.dr-danger { width: 100%; margin-top: 10px; }
 
 /* ---------- Tab 切换 ---------- */
 .tabs { display: flex; border-bottom: 2px solid var(--line); margin-bottom: 12px; }
