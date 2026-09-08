@@ -2404,6 +2404,7 @@ function showMoreMenu() {
         <button class="menu-item" id="mmSearch"><span class="mi-ico">🔍</span><span>添加课程（搜索）</span></button>
         <button class="menu-item" id="mmSync"><span class="mi-ico">☁</span><span>立即云备份</span></button>
         <button class="menu-item" id="mmInstall"><span class="mi-ico">📲</span><span>安装成手机 App</span></button>
+        <button class="menu-item" id="mmWidget"><span class="mi-ico">⏰</span><span>桌面快捷方式 / 下节课直达</span></button>
         <button class="menu-item" id="mmCodes"><span class="mi-ico">⌨️</span><span>粘贴课程代码</span></button>
         <button class="menu-item" id="mmBackup"><span class="mi-ico">⤓</span><span>备份与恢复</span></button>
       </div>
@@ -2425,6 +2426,28 @@ function showMoreMenu() {
   });
   $("mmCodes").addEventListener("click", () => { hideModal(); showCodesModal(); });
   $("mmBackup").addEventListener("click", () => { hideModal(); backupModal(); });
+  $("mmWidget").addEventListener("click", () => { hideModal(); showWidgetGuide(); });
+}
+
+/* 桌面小组件/快捷方式指南：真小组件是原生 App 专属；安卓给长按菜单，iOS 给「快捷指令」替代路径 */
+function showWidgetGuide() {
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && "ontouchend" in document);
+  const secAnd = `
+    <div class="wg-sec">🤖 安卓（Chrome）</div>
+    <p class="share-hint">先「添加到主屏幕」装成应用，然后<b>长按课壳图标</b> → 弹出「今日课程」「下节课」，点击直达。</p>`;
+  const secIos = `
+    <div class="wg-sec">🍎 iPhone / iPad</div>
+    <p class="share-hint">iOS 把长按菜单和小组件留给原生 App，网页应用加不了。官方替代：用「快捷指令」做一个直达图标，约 1 分钟：</p>
+    <p class="share-hint">① 打开「快捷指令」App → 右上角 ＋ 新建<br>② 添加操作 → 搜索「URL」→ 选「打开 URL」<br>③ 填入下面的链接：<code class="wg-url">https://jiad88376-coder.github.io/kebiao-ucas/?view=next</code><br>④ 点顶部名字改成「下节课」→ 底部分享 ⤴ →「添加到主屏幕」</p>
+    <p class="share-hint">之后桌面多一个「下节课」图标，点一下直接弹出下一节课的卡片。想加「今日课程」就把链接结尾换成 <code>?view=today</code> 再做一条。</p>`;
+  showModal(`
+    <div class="modal-card">
+      <h3>⏰ 桌面快捷方式</h3>
+      <p class="share-hint">小组件（Widget）是原生 App 专属，网页应用做不到；能做到的最接近形态如下。</p>
+      ${ios ? secIos + secAnd : secAnd + secIos}
+      <div class="modal-actions"><button class="ok" id="wgOk">知道了</button></div>
+    </div>`);
+  $("wgOk").addEventListener("click", hideModal);
 }
 
 /* 云备份注册引导：未登录点"立即云备份"时展示（讲清楚价值，注册优先） */

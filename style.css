@@ -363,6 +363,11 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 /* 4 个 class 压过 .r-btn.ghost（含暗色主题变体），否则选中态被覆盖、点了没反馈 */
 .alarm-row .r-btn.al-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 .alarm-row + .r-btn, .alarm-row ~ .r-btn { margin-top: 8px; width: 100%; }
+/* 快捷方式指南 */
+.wg-sec { font-weight: 700; margin: 10px 0 2px; font-size: 14px; }
+.wg-url { display: block; user-select: all; -webkit-user-select: all; background: #f0f2f7; border-radius: 8px;
+  padding: 8px 9px; font-size: 12px; word-break: break-all; margin: 4px 0 6px; }
+[data-theme="dark"] .wg-url { background: #262b37; }
 
 /* 感谢名单弹窗 */
 .thanks-card { text-align: left; }
