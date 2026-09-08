@@ -328,13 +328,13 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
 .conflict-mark { width: 11px; height: 11px; border-radius: 3px; display: inline-block;
   border: 2px solid var(--danger); }
 footer.footnote { text-align: center; margin: 10px 0 26px; }
-.support-row { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 0 0 26px; }
+.support-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 26px; }
 #support-link {
   display: inline-block; padding: 8px 18px; border-radius: 999px;
   background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.28);
   color: var(--primary, #3b82f6); font-weight: 600; font-size: 13px;
   text-decoration: none; transition: transform .12s ease, filter .12s ease;
-  margin-right: clamp(18px, 13vw, 120px);
+  margin-right: clamp(12px, 9vw, 72px);
 }
 #support-link:active { transform: scale(.96); filter: brightness(1.08); }
 [data-theme="dark"] #support-link { background: rgba(96,165,250,.16); color: #85b3ff; border-color: rgba(96,165,250,.35); }
