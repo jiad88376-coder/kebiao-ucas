@@ -2373,6 +2373,7 @@ function esc(s) {
 
 const THANKS = [
   { name: "09081202", amount: "¥1", date: "2026-09-08" },
+  { name: "09081534", amount: "¥5", date: "2026-09-08" },
   // { name: "昵称", amount: "¥10", date: "2026-09-08", msg: "留言（可省略）" },
 ];
 
