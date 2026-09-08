@@ -360,7 +360,8 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .alarm-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
 .alarm-row .r-btn { flex: 1; min-width: 72px; }
 .al-sec { margin: 12px 0 0; font-size: 12.5px; color: var(--muted); font-weight: 600; }
-.al-chip.active { background: var(--primary); color: #fff; }
+/* 4 个 class 压过 .r-btn.ghost（含暗色主题变体），否则选中态被覆盖、点了没反馈 */
+.alarm-row .r-btn.al-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 .alarm-row + .r-btn, .alarm-row ~ .r-btn { margin-top: 8px; width: 100%; }
 
 /* 感谢名单弹窗 */
