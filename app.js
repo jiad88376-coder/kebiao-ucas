@@ -1628,21 +1628,53 @@ function downloadICS(courses, warnMin, filename) {
 function showAlarmModal(code) {
   const c = courseMap[code];
   if (!c) return;
+  let scope = "term"; /* term=全学期 | next=仅下一节 */
+  let lead = 10;
   const card = el("div", "modal-card");
   card.appendChild(el("h3", "", "🔔 上课提醒（系统日历）"));
-  card.appendChild(el("p", "share-hint", "浏览器不能直接设系统闹钟，走系统日历最可靠：生成 .ics 文件 → 手机弹窗用「日历」打开 → 全部课次连同提醒一次性写入系统日历，之后按时提醒，无需打开本应用。iOS/安卓/电脑都支持。"));
-  card.appendChild(el("p", "share-hint", "提前多久提醒？"));
-  const row = el("div", "alarm-row");
+  card.appendChild(el("p", "share-hint", "生成 .ics → 用系统「日历」打开 → 课次连同提醒一次性写入日历，之后由系统按时提醒，iOS/安卓/电脑通用。"));
+  card.appendChild(el("p", "al-sec", "提醒范围"));
+  const scopeRow = el("div", "alarm-row");
+  const bNext = el("button", "r-btn ghost al-chip", "⏭ 仅下一节");
+  const bTerm = el("button", "r-btn ghost al-chip", "📅 全学期");
+  bNext.addEventListener("click", () => { scope = "next"; paint(); });
+  bTerm.addEventListener("click", () => { scope = "term"; paint(); });
+  scopeRow.appendChild(bNext);
+  scopeRow.appendChild(bTerm);
+  card.appendChild(scopeRow);
+  card.appendChild(el("p", "al-sec", "提前多久提醒"));
+  const leadRow = el("div", "alarm-row");
   for (const m of [5, 10, 15, 30]) {
-    const b = el("button", "r-btn", m + " 分钟前");
-    b.addEventListener("click", () => {
-      hideModal();
-      downloadICS([c], m, "课壳提醒-" + (c.name || c.code) + ".ics");
-    });
-    row.appendChild(b);
+    const b = el("button", "r-btn ghost al-chip", m + " 分钟前");
+    b.dataset.lead = m;
+    b.addEventListener("click", () => { lead = m; paint(); });
+    leadRow.appendChild(b);
   }
-  card.appendChild(row);
-  const all = el("button", "r-btn ghost", "📋 顺便导出我课表里的全部课程");
+  card.appendChild(leadRow);
+  function paint() {
+    bNext.classList.toggle("active", scope === "next");
+    bTerm.classList.toggle("active", scope === "term");
+    leadRow.querySelectorAll(".al-chip").forEach(b => b.classList.toggle("active", Number(b.dataset.lead) === lead));
+  }
+  paint();
+  const go = el("button", "r-btn", "🔔 生成日历提醒");
+  go.addEventListener("click", () => {
+    hideModal();
+    if (scope === "next") {
+      const nx = findNextClass([c], new Date());
+      if (!nx) { toast("该课未来 7 天没有课次，可改用「全学期」"); return; }
+      const w = getSemesterWeek(nx.date);
+      /* 只保留命中那一周：buildICS 会按时段+微调展开该周这一次课 */
+      const one = Object.assign({}, c, {
+        sessions: [Object.assign({}, nx.session, { weekSet: [[w, w]], weeks: "第" + w + "周" })]
+      });
+      downloadICS([one], lead, "课壳提醒-下一节-" + c.name + ".ics");
+    } else {
+      downloadICS([c], lead, "课壳提醒-" + c.name + ".ics");
+    }
+  });
+  card.appendChild(go);
+  const all = el("button", "r-btn ghost", "📋 导出课表全部课程（提前 10 分钟）");
   all.addEventListener("click", () => {
     hideModal();
     downloadICS(state.codes.map(x => courseMap[x]).filter(Boolean), 10, "课壳提醒-全部课程.ics");

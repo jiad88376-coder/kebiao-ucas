@@ -359,6 +359,9 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 /* 提醒导出弹窗 */
 .alarm-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
 .alarm-row .r-btn { flex: 1; min-width: 72px; }
+.al-sec { margin: 12px 0 0; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.al-chip.active { background: var(--primary); color: #fff; }
+.alarm-row + .r-btn, .alarm-row ~ .r-btn { margin-top: 8px; width: 100%; }
 
 /* 感谢名单弹窗 */
 .thanks-card { text-align: left; }
