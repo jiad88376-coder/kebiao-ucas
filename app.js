@@ -3060,10 +3060,12 @@ function showSchoolPicker(registry) {
     list.innerHTML = "";
     const k = String(kw || "").trim().toLowerCase();
     for (const s of registry) {
-      if (k && !((s.name || "").toLowerCase().includes(k) || (s.short || "").toLowerCase().includes(k) || (s.id || "").includes(k))) continue;
+      const hay = [s.name, s.short, s.alias, s.id].filter(Boolean).join(" ").toLowerCase();
+      if (k && !hay.includes(k)) continue;
       const item = el("button", "school-item");
       item.appendChild(el("span", "si-name", s.name));
       if (s.short && s.short !== s.name) item.appendChild(el("span", "si-short", s.short));
+      if (s.note) item.appendChild(el("span", "si-short", " · " + s.note));
       item.addEventListener("click", () => chooseSchool(s.id));
       list.appendChild(item);
     }
