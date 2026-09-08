@@ -141,6 +141,7 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
 .campus-Y { background: #30a46c; }
 .campus-Z { background: #f5a623; }
 .campus-HZ { background: #8b5cf6; }
+.campus-QD { background: #0ea5e9; }
 
 /* ---------- 主界面 ---------- */
 #main { max-width: 900px; margin: 0 auto; padding: 12px 10px 20px; }

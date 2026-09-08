@@ -1,5 +1,5 @@
 /* Service Worker: 离线缓存应用外壳 + 课程库 */
-const CACHE = "kebiao-ucas-v25";
+const CACHE = "kebiao-ucas-v26";
 const ASSETS = [
   "./",
   "./index.html",
@@ -13,6 +13,8 @@ const ASSETS = [
   "./data/schools/ucas-catalog.json",
   "./data/schools/hias.json",
   "./data/schools/hias-catalog.json",
+  "./data/schools/qingdao.json",
+  "./data/schools/qingdao-catalog.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/apple-touch-icon.png"

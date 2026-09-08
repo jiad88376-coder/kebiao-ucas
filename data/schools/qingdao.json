@@ -1,9 +1,9 @@
 {
-  "id": "hias",
-  "name": "中国科学院大学杭州高等研究院",
-  "short": "国科大杭高院",
+  "id": "qingdao",
+  "name": "中国科学院大学海洋学院",
+  "short": "国科大海洋学院",
   "minCodeLen": 8,
-  "catalogUrl": "./data/schools/hias-catalog.json",
+  "catalogUrl": "./data/schools/qingdao-catalog.json",
   "term": "2026秋季学期",
   "semesterMonday": "2026-08-31",
   "maxWeek": 25,
@@ -13,10 +13,10 @@
     "9": "17:05-17:50", "10": "18:30-19:15", "11": "19:20-20:05", "12": "20:15-21:00", "13": "21:05-21:50"
   },
   "campuses": [
-    { "code": "HZ", "name": "杭州" }
+    { "code": "QD", "name": "青岛" }
   ],
   "campusGeo": {
-    "HZ": { "lat": 30.190, "lon": 120.085 }
+    "QD": { "lat": 36.0622, "lon": 120.3812 }
   },
   "sections": [
     { "id": "am", "icon": "☀️", "label": "上午", "from": 1, "to": 4, "time": "8:30 – 12:00" },
