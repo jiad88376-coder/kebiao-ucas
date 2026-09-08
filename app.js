@@ -2353,6 +2353,7 @@ function showSearchModal() {
 
 /* 赞赏：点页脚"请作者喝杯奶茶"弹码（低调，不打扰任何人） */
 function showSupport() {
+  supportPing();
   showModal(`
     <div class="modal-card support-card">
       <h3>☕ 请作者喝杯奶茶</h3>
@@ -2363,6 +2364,21 @@ function showSupport() {
     </div>`);
   const c = $("spClose");
   if (c) c.addEventListener("click", hideModal);
+}
+
+/* 奶茶页打开计数（匿名：只记 did+day，每设备每天 1 次；表无 select 权限，数据只进不出） */
+function supportPing() {
+  try {
+    if (!supabaseClient || !online()) return;
+    let did = "";
+    try { did = localStorage.getItem(DID_KEY) || ""; } catch (e) {}
+    supabaseClient.from("support_opens")
+      .upsert(
+        { did: did || "anon", day: new Date().toISOString().slice(0, 10) },
+        { ignoreDuplicates: true, onConflict: "did,day" }
+      )
+      .then(() => {}, () => {});
+  } catch (e) {}
 }
 
 /* 感谢名单：微信赞赏码没有查询接口，作者在微信里核对记录后手动维护 THANKS 数组 */

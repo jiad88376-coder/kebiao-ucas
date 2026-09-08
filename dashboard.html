@@ -95,6 +95,13 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
     </div>
   </section>
   <section class="panel">
+    <h2>赞赏 funnel（奶茶页打开 · 匿名计数）</h2>
+    <div class="cap" id="supportBox">
+      <div class="c"><b>…</b><span>加载中</span></div>
+    </div>
+    <p class="note">口径：点开「请作者喝杯奶茶」弹窗即计 1 次；每台设备每天最多计 1 次（did + day 唯一）。数据只进不出（RLS 无 select），读取走 security definer RPC。需在 Supabase 建 support_opens 表 + support_stats() 函数。</p>
+  </section>
+  <section class="panel">
     <h2>当前架构一览</h2>
     <div class="cap">
       <div class="c primary"><b>前端 · GitHub Pages</b><span>SW v24：核心文件网络优先（绕 HTTP 缓存），课程库缓存优先 + 后台自愈</span></div>
@@ -244,6 +251,7 @@ function load() {
         .catch(function () { render(rows, null); });
       probeSources();
       loadForum();
+      loadSupport();
     })
     .catch(function (e) {
       document.getElementById("live").textContent = "🔴 无法连接数据源（双源均失败）";
@@ -268,6 +276,27 @@ function loadForum() {
         '<div class="c"><b>' + v.replies + '</b><span>回复（累计）</span></div>' +
         '<div class="c"><b>' + v.course_posts + '</b><span>课程关联帖（累计）</span></div>' +
         '<div class="c"><b>' + total + '</b><span>社区内容总量</span></div>';
+    })
+    .catch(function () {
+      box.innerHTML = '<div class="c"><b>—</b><span>读取失败</span></div>';
+    });
+}
+
+/* 赞赏漏斗：奶茶页打开计数（未建 support_stats 时显示提示） */
+function loadSupport() {
+  var box = document.getElementById("supportBox");
+  fetchVia("/rest/v1/rpc/support_stats", { apikey: API_KEY })
+    .then(function (s) {
+      var v = s && s[0] ? s[0] : null;
+      if (!v || typeof v.opens !== "number") {
+        box.innerHTML = '<div class="c"><b>—</b><span>统计函数未就绪（需在 Supabase 建 support_opens + support_stats）</span></div>';
+        return;
+      }
+      box.innerHTML =
+        '<div class="c"><b>' + v.opens + '</b><span>打开次数（累计）</span></div>' +
+        '<div class="c"><b>' + v.devices + '</b><span>独立设备（累计）</span></div>' +
+        '<div class="c"><b>' + v.today + '</b><span>今日打开</span></div>' +
+        '<div class="c"><b>' + v.devices_today + '</b><span>今日设备</span></div>';
     })
     .catch(function () {
       box.innerHTML = '<div class="c"><b>—</b><span>读取失败</span></div>';
