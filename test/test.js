@@ -123,5 +123,26 @@ app.__setRecords({});
 es = app.effSlot("C1", sessT, null);
 ok(es.day === 3 && es.p1 === 3 && es.p2 === 4, "清理后回落原始时段");
 
+console.log("== ics（系统日历提醒导出） ==");
+const sessI = { day: 3, p1: 1, p2: 2, room: "教1-103", weeks: "第1-2周", weekSet: [[1, 2]] };
+const icsOut = app.buildICS([{ code: "TEST-1", name: "测试课程;A,B", teacher: "张三", sessions: [sessI] }], 10);
+const icsText = icsOut.text;
+ok(icsOut.events === 2, "第1-2周展开为 2 个事件");
+ok(icsText.includes("DTSTART:20260902T083000"), "第1周周三=2026-09-02 8:30 开讲");
+ok(icsText.includes("DTEND:20260902T100500"), "第2节下课=10:05");
+ok(icsText.includes("TRIGGER:-PT10M"), "提前 10 分钟提醒");
+ok(icsText.includes("SUMMARY:测试课程\\;A\\,B"), "SUMMARY 特殊字符转义");
+ok(icsText.includes("LOCATION:教1-103"), "教室写入 LOCATION");
+ok(icsText.includes("X-WR-TIMEZONE:Asia/Shanghai"), "时区声明");
+const icsM5 = app.buildICS([{ code: "T2", name: "x", sessions: [sessI] }], 5);
+ok(icsM5.text.includes("TRIGGER:-PT5M"), "提前量参数生效");
+const dW2Wed = app.icsDateFor(2, 3);
+ok(dW2Wed.getFullYear() === 2026 && dW2Wed.getMonth() === 8 && dW2Wed.getDate() === 9, "第2周周三=2026-09-09");
+const icsCustom = app.buildICS([{ code: "T3", name: "y", sessions: [sessI] }], 10);
+app.__setRecords({ T3: { tweaks: { "3-1-2": { room: "改到202" } } } });
+const icsTweak = app.buildICS([{ code: "T3", name: "y", sessions: [sessI] }], 10);
+ok(icsTweak.text.includes("LOCATION:改到202"), "导出尊重用户微调教室");
+app.__setRecords({});
+
 console.log(`\n通过 ${passed} 项测试`);
 if (process.exitCode) { console.error("存在失败项"); process.exit(1); }

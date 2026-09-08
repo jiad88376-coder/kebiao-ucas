@@ -352,6 +352,10 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .sp-qr { display: block; width: min(64vw, 240px); margin: 0 auto; border-radius: 14px; }
 .sp-tip { margin: 8px 0 2px; font-size: 12px; color: #8a93a6; }
 [data-theme="dark"] .sp-note, [data-theme="dark"] .sp-tip { color: #9aa4b5; }
+/* 提醒导出弹窗 */
+.alarm-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.alarm-row .r-btn { flex: 1; min-width: 72px; }
+
 /* 感谢名单弹窗 */
 .thanks-card { text-align: left; }
 .thx-list { margin: 10px 0 4px; max-height: 46vh; overflow-y: auto; }

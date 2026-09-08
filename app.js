@@ -1429,6 +1429,118 @@ function bindSearch(inputEl, sugEl, onPick) {
   });
 }
 
+/* ---------------- 上课提醒：导出系统日历（.ics，含提前提醒） ----------------
+   浏览器无法直接写系统闹钟；改走系统日历通道：
+   生成 .ics → 系统日历打开 → 课次全部写入系统日历并自带提醒，由系统按日程提醒。 */
+function pad2(n) { return n < 10 ? "0" + n : "" + n; }
+function icsStamp() {
+  const d = new Date();
+  return d.getUTCFullYear() + pad2(d.getUTCMonth() + 1) + pad2(d.getUTCDate()) + "T" +
+    pad2(d.getUTCHours()) + pad2(d.getUTCMinutes()) + pad2(d.getUTCSeconds()) + "Z";
+}
+function icsPeriodTime(p, end) {
+  const s = PERIOD_TIMES[p] || "";
+  if (!s) return null;
+  const seg = s.split("-")[end ? 1 : 0];
+  return seg || null;
+}
+function icsDateFor(week, day) {
+  const d = parseYMD(SEMESTER_MONDAY);
+  d.setDate(d.getDate() + (week - 1) * 7 + (day - 1));
+  return d;
+}
+function icsDT(y, m, d, hm) {
+  const a = String(hm).split(":");
+  return "" + y + pad2(m) + pad2(d) + "T" + pad2(+a[0]) + pad2(+a[1]) + "00";
+}
+function escICS(s) {
+  return String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+}
+/* 按周展开成独立 VEVENT（兼容任意不连续周次）；教室/时间尊重用户微调（单日 > 学期 > 默认） */
+function buildICS(courses, warnMin) {
+  const stamp = icsStamp();
+  const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//kebiao//courseshell//CN",
+    "CALSCALE:GREGORIAN", "X-WR-TIMEZONE:Asia/Shanghai"];
+  let n = 0;
+  for (const c of courses) {
+    if (!c) continue;
+    const seen = new Set();
+    for (const s of (c.sessions || [])) {
+      const k = sessKey(s);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      for (const iv of (s.weekSet || [])) {
+        for (let w = iv[0]; w <= iv[1]; w++) {
+          if (w < 1 || (MAX_WEEK && w > MAX_WEEK)) continue;
+          const d = icsDateFor(w, s.day);
+          const ds = dateStrOf(d);
+          const es = effSlot(c.code, s, ds);
+          const room = effRoom(c, s, ds);
+          const t1 = icsPeriodTime(es.p1, false), t2 = icsPeriodTime(es.p2, true);
+          if (!t1 || !t2) continue;
+          L.push("BEGIN:VEVENT");
+          L.push("UID:" + c.code + "-" + w + "-" + es.day + "-" + es.p1 + "@courseshell.cloud");
+          L.push("DTSTAMP:" + stamp);
+          L.push("DTSTART:" + icsDT(d.getFullYear(), d.getMonth() + 1, d.getDate(), t1));
+          L.push("DTEND:" + icsDT(d.getFullYear(), d.getMonth() + 1, d.getDate(), t2));
+          L.push("SUMMARY:" + escICS(c.name));
+          if (room) L.push("LOCATION:" + escICS(room));
+          L.push("DESCRIPTION:" + escICS("教师：" + (c.teacher || "未定") + " · 课程编码：" + c.code));
+          L.push("BEGIN:VALARM");
+          L.push("TRIGGER:-PT" + warnMin + "M");
+          L.push("ACTION:DISPLAY");
+          L.push("DESCRIPTION:" + escICS(warnMin + " 分钟后上课：" + c.name));
+          L.push("END:VALARM");
+          L.push("END:VEVENT");
+          n++;
+        }
+      }
+    }
+  }
+  L.push("END:VCALENDAR");
+  return { text: L.join("\r\n"), events: n };
+}
+function downloadICS(courses, warnMin, filename) {
+  const r = buildICS(courses, warnMin);
+  if (!r.events) { toast("没有可导出的上课时段"); return; }
+  const blob = new Blob([r.text], { type: "text/calendar;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+  toast(`已生成 ${r.events} 条提醒事件，用系统日历打开即可`);
+}
+function showAlarmModal(code) {
+  const c = courseMap[code];
+  if (!c) return;
+  const card = el("div", "modal-card");
+  card.appendChild(el("h3", "", "🔔 上课提醒（系统日历）"));
+  card.appendChild(el("p", "share-hint", "浏览器不能直接设系统闹钟，走系统日历最可靠：生成 .ics 文件 → 手机弹窗用「日历」打开 → 全部课次连同提醒一次性写入系统日历，之后按时提醒，无需打开本应用。iOS/安卓/电脑都支持。"));
+  card.appendChild(el("p", "share-hint", "提前多久提醒？"));
+  const row = el("div", "alarm-row");
+  for (const m of [5, 10, 15, 30]) {
+    const b = el("button", "r-btn", m + " 分钟前");
+    b.addEventListener("click", () => {
+      hideModal();
+      downloadICS([c], m, "课壳提醒-" + (c.name || c.code) + ".ics");
+    });
+    row.appendChild(b);
+  }
+  card.appendChild(row);
+  const all = el("button", "r-btn ghost", "📋 顺便导出我课表里的全部课程");
+  all.addEventListener("click", () => {
+    hideModal();
+    downloadICS(state.codes.map(x => courseMap[x]).filter(Boolean), 10, "课壳提醒-全部课程.ics");
+  });
+  card.appendChild(all);
+  const close = el("button", "r-btn ghost", "取消");
+  close.addEventListener("click", hideModal);
+  card.appendChild(close);
+  showModal(card);
+}
+
 /* ---------------- 课程详情抽屉 ---------------- */
 let drawerCourse = null;
 let drawerTab = "notes";
@@ -1503,6 +1615,10 @@ function renderDrawer() {
   if (drawerTab === "homework") body.appendChild(homeworkView());
   if (drawerTab === "exams") body.appendChild(examsView());
   d.appendChild(body);
+
+  const alarmBtn = el("button", "r-btn", "🔔 上课提醒");
+  alarmBtn.addEventListener("click", () => showAlarmModal(c.code));
+  d.appendChild(alarmBtn);
 
   const tweakBtn = el("button", "r-btn ghost", "📍 调整上课信息");
   tweakBtn.addEventListener("click", () => {
@@ -3216,6 +3332,7 @@ if (typeof module !== "undefined" && module.exports) {
     getSemesterWeek, inWeekSet, fmtWeekRange, SEMESTER_MONDAY, MAX_WEEK,
     weekMonday, nearestCourseDay,
     effSlot,
+    buildICS, icsDateFor,
     __setRecords: (o) => { state.records = o || {}; } /* 仅供测试注入微调数据 */
   };
 }
