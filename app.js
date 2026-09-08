@@ -725,6 +725,112 @@ function render() {
   renderGrid();
   $("termBadge").textContent = catalog && catalog.meta && catalog.meta.term
     ? catalog.meta.term : "";
+  updateAppBadge();
+}
+
+/* ---------------- 桌面快捷方式与角标：下节课 / 今日剩余 ----------------
+   真·系统小组件（iOS WidgetKit / Android AppWidget）只有原生 App 能做；
+   PWA 的近似方案：manifest shortcuts 长按图标直达 + App 角标计数。 */
+function dayIndexOfDate(d) { return d.getDay() === 0 ? 7 : d.getDay(); }
+function hmToDate(base, hm) {
+  const a = String(hm).split(":");
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), +a[0], +a[1], 0, 0);
+}
+function periodBounds(date, p1, p2) {
+  const t1 = (PERIOD_TIMES[p1] || "").split("-")[0];
+  const t2 = (PERIOD_TIMES[p2] || "").split("-")[1];
+  if (!t1 || !t2) return null;
+  return { start: hmToDate(date, t1), end: hmToDate(date, t2) };
+}
+/* 未来 7 天内的下一节课（进行中的课也算；尊重用户微调） */
+function findNextClass(courses, now) {
+  const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const cands = [];
+  for (let off = 0; off <= 7; off++) {
+    const date = new Date(today0.getFullYear(), today0.getMonth(), today0.getDate() + off);
+    const ds = dateStrOf(date);
+    const wk = getSemesterWeek(date);
+    const dayIdx = dayIndexOfDate(date);
+    for (const c of courses) {
+      if (!c) continue;
+      for (const s of (c.sessions || [])) {
+        const es = effSlot(c.code, s, ds);
+        if (es.day !== dayIdx) continue;
+        if (s.weekSet && !inWeekSet(s.weekSet, wk)) continue;
+        const b = periodBounds(date, es.p1, es.p2);
+        if (!b || b.end <= now) continue;
+        cands.push({ course: c, session: s, slot: es, bounds: b, date, room: effRoom(c, s, ds) });
+      }
+    }
+  }
+  if (!cands.length) return null;
+  cands.sort((a, b) => a.bounds.start - b.bounds.start);
+  return cands[0];
+}
+/* 今天还没下课的节次个数（角标用，去重同码同段） */
+function todayRemainingClasses(courses, now) {
+  const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ds = dateStrOf(today0);
+  const wk = getSemesterWeek(today0);
+  const dayIdx = dayIndexOfDate(today0);
+  const seen = new Set();
+  let n = 0;
+  for (const c of courses) {
+    if (!c) continue;
+    for (const s of (c.sessions || [])) {
+      const k = c.code + "|" + sessKey(s);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const es = effSlot(c.code, s, ds);
+      if (es.day !== dayIdx) continue;
+      if (s.weekSet && !inWeekSet(s.weekSet, wk)) continue;
+      const b = periodBounds(today0, es.p1, es.p2);
+      if (!b || b.end <= now) continue;
+      n++;
+    }
+  }
+  return n;
+}
+function showNextClassModal(nx) {
+  const c = nx.course;
+  const now = new Date();
+  const mins = Math.round((nx.bounds.start - now) / 60000);
+  const card = el("div", "modal-card");
+  card.appendChild(el("div", "auth-logo", "⏰"));
+  card.appendChild(el("h3", "", "下一节：" + c.name));
+  const st = nx.bounds.start, en = nx.bounds.end;
+  card.appendChild(el("p", "share-hint",
+    DAY_NAMES[nx.slot.day - 1] + " 第" + nx.slot.p1 + (nx.slot.p2 > nx.slot.p1 ? "-" + nx.slot.p2 : "") + "节 · " +
+    (st.getMonth() + 1) + "月" + st.getDate() + "日 " + pad2(st.getHours()) + ":" + pad2(st.getMinutes()) +
+    " – " + pad2(en.getHours()) + ":" + pad2(en.getMinutes())));
+  card.appendChild(el("p", "share-hint", (nx.room || "教室未定") + (c.teacher ? " · " + c.teacher : "")));
+  card.appendChild(el("p", "share-hint", mins > 0
+    ? (mins >= 60 ? Math.floor(mins / 60) + " 小时 " + (mins % 60) + " 分钟后开讲" : mins + " 分钟后开讲")
+    : "正在上课中"));
+  const row = el("div", "modal-actions");
+  const go = el("button", "ok", "查看当日课表");
+  go.addEventListener("click", () => {
+    hideModal();
+    viewWeek = getSemesterWeek(nx.date);
+    if (window.innerWidth <= 640) viewDay = dayIndexOfDate(nx.date);
+    render();
+  });
+  const cancel = el("button", "cancel", "关闭");
+  cancel.addEventListener("click", hideModal);
+  row.appendChild(go);
+  row.appendChild(cancel);
+  card.appendChild(row);
+  showModal(card);
+}
+/* 应用角标：今天还剩几节课（Chromium 系支持；iOS 不支持则静默跳过） */
+function updateAppBadge() {
+  try {
+    if (!navigator.setAppBadge) return;
+    const list = state.codes.map(c => courseMap[c]).filter(Boolean);
+    const n = todayRemainingClasses(list, new Date());
+    if (n > 0) navigator.setAppBadge(n);
+    else navigator.clearAppBadge();
+  } catch (e) {}
 }
 
 /* 周次切换条 */
@@ -3014,6 +3120,10 @@ function init() {
   $("btnMore").addEventListener("click", showMoreMenu);
   $("btnTheme").addEventListener("click", cycleTheme);
   applyTheme(themePref());
+  /* 回到前台时刷新角标（今天剩余课程数） */
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) updateAppBadge();
+  });
   renderReplyBadge(); /* 启动时恢复未读红点（数据随心跳更新） */
   /* 安装提醒条按钮 */
   $("installGo").addEventListener("click", () => {
@@ -3099,6 +3209,20 @@ function init() {
         if (nd) viewDay = nd;
       }
       setTimeout(() => toast("第" + w0 + "周无课，已显示第" + w + "周"), 600);
+    }
+  }
+
+  /* 快捷方式深链（manifest shortcuts：长按图标 → 今日课程/下节课） */
+  const jump = params.get("view");
+  if ((jump === "today" || jump === "next") && state.codes.length) {
+    viewWeek = curWeek();
+    if (window.innerWidth <= 640) viewDay = dayIndexOfToday();
+    if (jump === "next") {
+      setTimeout(() => {
+        const nx = findNextClass(state.codes.map(c => courseMap[c]).filter(Boolean), new Date());
+        if (nx) showNextClassModal(nx);
+        else toast("接下来 7 天没有课了 🎉");
+      }, 400); /* 等首屏渲染完成 */
     }
   }
 
@@ -3340,6 +3464,7 @@ if (typeof module !== "undefined" && module.exports) {
     weekMonday, nearestCourseDay,
     effSlot,
     buildICS, icsDateFor,
+    findNextClass, todayRemainingClasses,
     __setRecords: (o) => { state.records = o || {}; } /* 仅供测试注入微调数据 */
   };
 }

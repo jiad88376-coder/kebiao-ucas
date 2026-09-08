@@ -144,5 +144,32 @@ const icsTweak = app.buildICS([{ code: "T3", name: "y", sessions: [sessI] }], 10
 ok(icsTweak.text.includes("LOCATION:改到202"), "导出尊重用户微调教室");
 app.__setRecords({});
 
+console.log("== 下节课 / 今日剩余（桌面快捷方式） ==");
+/* 第2周: 9/7(一)-9/13(日)。周二节次: 1-2=8:30-10:05, 3-4=10:25-12:00, 5-6=13:30-15:05 */
+const tue56 = { code: "A1", name: "下午课", sessions: [{ day: 2, p1: 5, p2: 6, weekSet: [[1, 18]], room: "R56" }] };
+const wed12 = { code: "A2", name: "上午课", sessions: [{ day: 3, p1: 1, p2: 2, weekSet: [[1, 18]] }] };
+const tue12 = { code: "A3", name: "早课", sessions: [{ day: 2, p1: 1, p2: 2, weekSet: [[1, 18]] }] };
+const tue34w3 = { code: "A4", name: "第五周才有", sessions: [{ day: 2, p1: 3, p2: 4, weekSet: [[5, 6]] }] };
+const noonTue = new Date(2026, 8, 8, 12, 0);
+let nx = app.findNextClass([tue56], noonTue);
+ok(nx && nx.course.code === "A1" && nx.slot.p1 === 5 && nx.room === "R56", "周二中午 → 周二5-6节");
+ok(nx && nx.bounds.start.getHours() === 13 && nx.bounds.start.getMinutes() === 30, "下一节 13:30 开讲");
+nx = app.findNextClass([wed12], noonTue);
+ok(nx && nx.course.code === "A2" && nx.date.getDate() === 9, "周二中午无当日课 → 次日周三");
+nx = app.findNextClass([wed12, tue56], noonTue);
+ok(nx && nx.course.code === "A1", "多门课取最早");
+ok(app.findNextClass([tue34w3], noonTue) === null, "仅第3周有课的课 → 7 天内找不到");
+ok(app.findNextClass([], noonTue) === null, "空课表 → null");
+const nineTue = new Date(2026, 8, 8, 9, 0);
+nx = app.findNextClass([tue12, tue56], nineTue);
+ok(nx && nx.course.code === "A3", "上课进行中(1-2节 8:30-10:05)也算下一节");
+ok(app.todayRemainingClasses([tue12, tue56], nineTue) === 2, "周二9点：1-2进行中 + 5-6未上 = 2");
+ok(app.todayRemainingClasses([tue12, tue56], noonTue) === 1, "周二12点：1-2已结束，剩 5-6 = 1");
+ok(app.todayRemainingClasses([tue56, wed12], noonTue) === 1, "别天的课不计入今日");
+app.__setRecords({ "A1": { tweaks: { "2-5-6": { day: 4, p1: 10, p2: 12 } } } });
+nx = app.findNextClass([tue56], noonTue);
+ok(nx && nx.slot.day === 4 && nx.slot.p1 === 10, "下节课尊重用户时间微调");
+app.__setRecords({});
+
 console.log(`\n通过 ${passed} 项测试`);
 if (process.exitCode) { console.error("存在失败项"); process.exit(1); }
