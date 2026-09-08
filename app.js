@@ -1182,11 +1182,18 @@ function buildWeatherCard() {
   mini.appendChild(el("span", "wxm-t", "天气加载中…"));
   const mx = el("span", "wxm-x", open ? "收起 ▴" : "展开 ▾");
   mini.appendChild(mx);
-  mini.addEventListener("click", () => {
+  /* 展开态：摘要条隐藏，「收起」挪到标题行右侧 */
+  const hx = el("span", "wx-head-x", open ? "收起 ▴" : "展开 ▾");
+  head.appendChild(hx);
+  const toggleWx = () => {
     const nowClosed = card.classList.toggle("closed");
-    mx.textContent = nowClosed ? "展开 ▾" : "收起 ▴";
+    const label = nowClosed ? "展开 ▾" : "收起 ▴";
+    mx.textContent = label;
+    hx.textContent = label;
     try { localStorage.setItem("kebiao:wxopen", nowClosed ? "0" : "1"); } catch (e) {}
-  });
+  };
+  mini.addEventListener("click", toggleWx);
+  hx.addEventListener("click", toggleWx);
   card.appendChild(mini);
   const strip = el("div", "wx-strip");
   strip.appendChild(el("div", "wx-none", "天气加载中…"));
