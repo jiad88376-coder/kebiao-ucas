@@ -2372,12 +2372,12 @@ function supportPing() {
     if (!supabaseClient || !online()) return;
     let did = "";
     try { did = localStorage.getItem(DID_KEY) || ""; } catch (e) {}
-    supabaseClient.from("support_opens")
+    /* 必须走 withFailover：直连 supabase.co 在国内常被重置，静默失败会漏计 */
+    withFailover((c) => c.from("support_opens")
       .upsert(
         { did: did || "anon", day: new Date().toISOString().slice(0, 10) },
         { ignoreDuplicates: true, onConflict: "did,day" }
-      )
-      .then(() => {}, () => {});
+      )).then(() => {}, () => {});
   } catch (e) {}
 }
 
@@ -2388,6 +2388,8 @@ function esc(s) {
 }
 
 const THANKS = [
+  { name: "一灯大师", amount: "¥1", date: "2026-09-09" },
+  { name: "09090054", amount: "¥5", date: "2026-09-09" },
   { name: "09081202", amount: "¥1", date: "2026-09-08" },
   { name: "09081534", amount: "¥5", date: "2026-09-08" },
   // { name: "昵称", amount: "¥10", date: "2026-09-08", msg: "留言（可省略）" },
