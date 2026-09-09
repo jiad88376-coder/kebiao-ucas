@@ -171,5 +171,26 @@ nx = app.findNextClass([tue56], noonTue);
 ok(nx && nx.slot.day === 4 && nx.slot.p1 === 10, "下节课尊重用户时间微调");
 app.__setRecords({});
 
+console.log("== 日期与转义工具（重构后公共出口） ==");
+ok(app.dateStrOf(new Date(2026, 8, 9)) === "2026-09-09", "dateStrOf 补零成 YYYY-MM-DD");
+ok(/^\d{4}-\d{2}-\d{2}$/.test(app.todayStr()), "todayStr 本地时区日期格式");
+ok(app.esc('<b>&"\'') === "&lt;b&gt;&amp;&quot;&#39;", "esc HTML 特殊字符转义");
+ok(app.esc(null) === "" && app.esc(undefined) === "", "esc 空值 → 空串");
+
+console.log("== periodHM（节次时刻统一出口，ICS/下节课共用） ==");
+ok(app.periodHM(1, false) === "8:30", "第1节上课 8:30");
+ok(app.periodHM(2, true) === "10:05", "第2节下课 10:05");
+ok(app.periodHM(13, true) === "21:50", "第13节下课 21:50");
+ok(app.periodHM(99, false) === null, "无配置节次 → null");
+
+console.log("== 天气码映射（WMO 单表驱动） ==");
+ok(app.wmoIcon(0) === "☀️" && app.wmoShort(0) === "晴", "0 → 晴");
+ok(app.wmoIcon(2) === "⛅" && app.wmoShort(2) === "多云", "2 → 多云（图标/短语区分）");
+ok(app.wmoShort(3) === "阴" && app.wmoIcon(3) === "☁️", "3 → 阴");
+ok(app.wmoShort(63) === "雨" && app.wmoShort(51) === "毛毛雨", "雨带细分");
+ok(app.wmoIcon(95) === "⛈" && app.wmoShort(95) === "雷雨", "95 → 雷雨");
+ok(app.wmoIcon(999) === "⛈" && app.wmoShort(999) === "雷雨", "95+ 一律按雷雨（保持原口径）");
+ok(app.wmoIcon(88) === "⛈" && app.wmoShort(88) === "变天", "未覆盖码段 → 兜底");
+
 console.log(`\n通过 ${passed} 项测试`);
 if (process.exitCode) { console.error("存在失败项"); process.exit(1); }

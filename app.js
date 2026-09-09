@@ -125,8 +125,7 @@ function daysLeft(dateStr) {
 }
 /* 本地时区今天的 YYYY-MM-DD（toISOString 是 UTC，晚上会差一天） */
 function todayStr() {
-  const d = new Date();
-  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  return dateStrOf(new Date());
 }
 
 /* ---------------- 应用状态 ---------------- */
@@ -350,7 +349,7 @@ function showAuthModal() {
       <div class="modal-card auth-card">
         <div class="auth-logo">✓</div>
         <div class="auth-head">已登录</div>
-        <p class="auth-desc">${authUser.email}<br>课表与笔记云同步中，换设备登录同一账号即可互通</p>
+        <p class="auth-desc">${esc(authUser.email)}<br>课表与笔记云同步中，换设备登录同一账号即可互通</p>
         <div class="modal-actions">
           <button class="ok" id="authSync">立即同步</button>
           <button class="cancel" id="authOut">退出登录</button>
@@ -362,7 +361,7 @@ function showAuthModal() {
       toast("同步完成");
     });
     $("authOut").addEventListener("click", async () => {
-      await supabaseClient.auth.signOut();
+      await withFailover((c) => c.auth.signOut());
       authUser = null;
       updateAuthUI();
       hideModal();
@@ -404,7 +403,7 @@ async function doPasswordLogin(emailEl, passEl, btnId = "authLogin") {
   const old = btn.textContent;
   btn.textContent = "登录中…";
   try {
-    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
+    const { data, error } = await withFailover((c) => c.auth.signInWithPassword({ email, password: pass }));
     if (error) throw error;
     authUser = data.user;
     updateAuthUI();
@@ -450,7 +449,7 @@ function showAuthSignupUI(email) {
     $("suSend").disabled = true;
     $("suSend").textContent = "发送中…";
     try {
-      const { error } = await supabaseClient.auth.signInWithOtp({ email });
+      const { error } = await withFailover((c) => c.auth.signInWithOtp({ email }));
       if (error) throw error;
       sent = true;
       codeEl.style.display = "block";
@@ -473,10 +472,10 @@ function showAuthSignupUI(email) {
     $("suDone").disabled = true;
     $("suDone").textContent = "注册中…";
     try {
-      const { data, error } = await supabaseClient.auth.verifyOtp({ email, token, type: "email" });
+      const { data, error } = await withFailover((c) => c.auth.verifyOtp({ email, token, type: "email" }));
       if (error) throw error;
       authUser = data.user;
-      const { error: perr } = await supabaseClient.auth.updateUser({ password: pass });
+      const { error: perr } = await withFailover((c) => c.auth.updateUser({ password: pass }));
       if (perr) {
         updateAuthUI();
         hideModal();
@@ -600,6 +599,15 @@ function showModal(htmlOrNode) {
   m.classList.remove("hidden");
 }
 function hideModal() { $("modal").classList.add("hidden"); }
+/* 单按钮弹窗外壳：inner 填 modal-card 内部（不含按钮行），点唯一按钮关闭 */
+function showInfoModal(inner, label, cls, id, cardCls) {
+  label = label || "知道了";
+  cls = cls || "ok";
+  id = id || "infoOk";
+  showModal('<div class="modal-card' + (cardCls ? " " + cardCls : "") + '">' + inner +
+    '<div class="modal-actions"><button class="' + cls + '" id="' + id + '">' + label + '</button></div></div>');
+  $(id).addEventListener("click", hideModal);
+}
 
 /* ---------------- 输入体验工具 ---------------- */
 /* 输入时自动增高（上限 maxH px），避免在小框里滚动 */
@@ -736,9 +744,13 @@ function hmToDate(base, hm) {
   const a = String(hm).split(":");
   return new Date(base.getFullYear(), base.getMonth(), base.getDate(), +a[0], +a[1], 0, 0);
 }
+/* 第 p 节的上/下课时刻（end=0 取"8:30"，end=1 取"10:05"）；无配置返回 null */
+function periodHM(p, end) {
+  const s = PERIOD_TIMES[p] || "";
+  return s.split("-")[end ? 1 : 0] || null;
+}
 function periodBounds(date, p1, p2) {
-  const t1 = (PERIOD_TIMES[p1] || "").split("-")[0];
-  const t2 = (PERIOD_TIMES[p2] || "").split("-")[1];
+  const t1 = periodHM(p1, false), t2 = periodHM(p2, true);
   if (!t1 || !t2) return null;
   return { start: hmToDate(date, t1), end: hmToDate(date, t2) };
 }
@@ -1187,38 +1199,28 @@ function pickEgg(secId, ctx, blocks) {
   return pick;
 }
 
-/* 天气码 → 一句话短语（摘要条用） */
-function wmoShort(code) {
-  if (code === 0) return "晴";
-  if (code === 1 || code === 2) return "多云";
-  if (code === 3) return "阴";
-  if (code === 45 || code === 48) return "雾";
-  if (code >= 51 && code <= 57) return "毛毛雨";
-  if (code >= 61 && code <= 67) return "雨";
-  if (code >= 71 && code <= 77) return "雪";
-  if (code >= 80 && code <= 82) return "阵雨";
-  if (code === 85 || code === 86) return "阵雪";
-  if (code >= 95) return "雷雨";
-  return "变天";
-}
+/* 天气码 → 图标/短语（Open-Meteo WMO 码，一张表驱动两个函数） */
+const WMO_TABLE = [
+  { test: (c) => c === 0, icon: "☀️", short: "晴" },
+  { test: (c) => c === 1, icon: "🌤", short: "多云" },
+  { test: (c) => c === 2, icon: "⛅", short: "多云" },
+  { test: (c) => c === 3, icon: "☁️", short: "阴" },
+  { test: (c) => c === 45 || c === 48, icon: "🌫", short: "雾" },
+  { test: (c) => c >= 51 && c <= 57, icon: "🌦", short: "毛毛雨" },
+  { test: (c) => c >= 61 && c <= 67, icon: "🌧", short: "雨" },
+  { test: (c) => c >= 71 && c <= 77, icon: "🌨", short: "雪" },
+  { test: (c) => c >= 80 && c <= 82, icon: "🌦", short: "阵雨" },
+  { test: (c) => c === 85 || c === 86, icon: "🌨", short: "阵雪" },
+  { test: (c) => c >= 95, icon: "⛈", short: "雷雨" }
+];
+const WMO_FALLBACK = { icon: "⛈", short: "变天" };
+function wmoRow(code) { return WMO_TABLE.find(w => w.test(code)) || WMO_FALLBACK; }
+function wmoIcon(code) { return wmoRow(code).icon; }
+function wmoShort(code) { return wmoRow(code).short; }
 
 /* ---------------- 逐小时天气（Open-Meteo, 免密钥; 按当天课程所在校区取坐标） ---------------- */
 const WX_CACHE_KEY = "kebiao:wx:v1";
 let wxMem = null;
-
-function wmoIcon(code) {
-  if (code === 0) return "☀️";
-  if (code === 1) return "🌤";
-  if (code === 2) return "⛅";
-  if (code === 3) return "☁️";
-  if (code === 45 || code === 48) return "🌫";
-  if (code >= 51 && code <= 57) return "🌦";
-  if (code >= 61 && code <= 67) return "🌧";
-  if (code >= 71 && code <= 77) return "🌨";
-  if (code >= 80 && code <= 82) return "🌦";
-  if (code === 85 || code === 86) return "🌨";
-  return "⛈";
-}
 
 function weatherCampus() {
   const counts = {};
@@ -1315,7 +1317,7 @@ async function fillWeatherCard(strip, mini, card, date, dd) {
     const data = await getWeather(coords[0], coords[1]);
     if (!strip.isConnected) return; // 用户已切走视图
     const H = data.hourly;
-    const ds = date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+    const ds = dateStrOf(date);
     const nowH = new Date().getHours();
     const items = [];
     for (let i = 0; i < H.time.length; i++) {
@@ -1537,9 +1539,13 @@ function bindSearch(inputEl, sugEl, onPick) {
   inputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && lastHits.length) { e.preventDefault(); pick(lastHits[0]); }
   });
-  document.addEventListener("click", (e) => {
+  /* 点空白收起建议（换弹窗时移除旧监听，防泄漏） */
+  const onDocClick = (e) => {
     if (!sugEl.contains(e.target) && e.target !== inputEl) sugEl.innerHTML = "";
-  });
+  };
+  if (inputEl._docClick) document.removeEventListener("click", inputEl._docClick);
+  inputEl._docClick = onDocClick;
+  document.addEventListener("click", onDocClick);
 }
 
 /* ---------------- 上课提醒：导出系统日历（.ics，含提前提醒） ----------------
@@ -1550,12 +1556,6 @@ function icsStamp() {
   const d = new Date();
   return d.getUTCFullYear() + pad2(d.getUTCMonth() + 1) + pad2(d.getUTCDate()) + "T" +
     pad2(d.getUTCHours()) + pad2(d.getUTCMinutes()) + pad2(d.getUTCSeconds()) + "Z";
-}
-function icsPeriodTime(p, end) {
-  const s = PERIOD_TIMES[p] || "";
-  if (!s) return null;
-  const seg = s.split("-")[end ? 1 : 0];
-  return seg || null;
 }
 function icsDateFor(week, day) {
   const d = parseYMD(SEMESTER_MONDAY);
@@ -1589,7 +1589,7 @@ function buildICS(courses, warnMin) {
           const ds = dateStrOf(d);
           const es = effSlot(c.code, s, ds);
           const room = effRoom(c, s, ds);
-          const t1 = icsPeriodTime(es.p1, false), t2 = icsPeriodTime(es.p2, true);
+          const t1 = periodHM(es.p1, false), t2 = periodHM(es.p2, true);
           if (!t1 || !t2) continue;
           L.push("BEGIN:VEVENT");
           L.push("UID:" + c.code + "-" + w + "-" + es.day + "-" + es.p1 + "@courseshell.cloud");
@@ -2015,9 +2015,8 @@ function compressImage(file) {
   });
 }
 function viewNoteImage(src) {
-  showModal('<div class="modal-card"><img id="nvImg" alt="笔记图片"><div class="modal-actions"><button class="cancel" id="nvClose">关闭</button></div></div>');
+  showInfoModal('<img id="nvImg" alt="笔记图片">', "关闭", "cancel", "nvClose");
   $("nvImg").src = src;
-  $("nvClose").addEventListener("click", hideModal);
 }
 
 function notesView() {
@@ -2354,16 +2353,13 @@ function showSearchModal() {
 /* 赞赏：点页脚"请作者喝杯奶茶"弹码（低调，不打扰任何人） */
 function showSupport() {
   supportPing();
-  showModal(`
-    <div class="modal-card support-card">
+  showInfoModal(`
+    <div class="support-card">
       <h3>☕ 请作者喝杯奶茶</h3>
       <p class="sp-note">课壳永久免费，你的支持是更新的动力</p>
       <img class="sp-qr" src="./support-qr.jpg" alt="微信赞赏码">
       <p class="sp-tip">微信扫一扫 · 金额随意 · 留言必回</p>
-      <div class="modal-actions"><button class="cancel" id="spClose">关闭</button></div>
-    </div>`);
-  const c = $("spClose");
-  if (c) c.addEventListener("click", hideModal);
+    </div>`, "关闭", "cancel", "spClose");
 }
 
 /* 奶茶页打开计数（匿名：只记 did+day，每设备每天 1 次；表无 select 权限，数据只进不出） */
@@ -2375,7 +2371,7 @@ function supportPing() {
     /* 必须走 withFailover：直连 supabase.co 在国内常被重置，静默失败会漏计 */
     withFailover((c) => c.from("support_opens")
       .upsert(
-        { did: did || "anon", day: new Date().toISOString().slice(0, 10) },
+        { did: did || "anon", day: todayStr() }, /* 本地时区日期：与"今天"口径一致（ISO 是 UTC，凌晨会差一天） */
         { ignoreDuplicates: true, onConflict: "did,day" }
       )).then(() => {}, () => {});
   } catch (e) {}
@@ -2404,15 +2400,11 @@ function showThanks() {
     '</div>').join("");
   const body = rows ||
     '<div class="thx-empty">名单虚位以待<br>赞赏时留言你的昵称，就会出现在这里</div>';
-  showModal(`
-    <div class="modal-card thanks-card">
-      <h3>🙏 感谢名单</h3>
-      <div class="thx-list">${body}</div>
-      <p class="thx-foot">名单由作者定期在微信核对赞赏记录后更新 · 打赏不留名也可以</p>
-      <div class="modal-actions"><button class="cancel" id="thClose">关闭</button></div>
-    </div>`);
-  const c = $("thClose");
-  if (c) c.addEventListener("click", hideModal);
+  showInfoModal(`
+    <h3>🙏 感谢名单</h3>
+    <div class="thx-list">${body}</div>
+    <p class="thx-foot">名单由作者定期在微信核对赞赏记录后更新 · 打赏不留名也可以</p>`,
+    "关闭", "cancel", "thClose", "thanks-card");
 }
 
 /* ---------------- 更多菜单（论坛/代码/备份收纳于此） ---------------- */
@@ -2451,7 +2443,7 @@ function showMoreMenu() {
 
 /* 桌面小组件/快捷方式指南：真小组件是原生 App 专属；安卓给长按菜单，iOS 给「快捷指令」替代路径 */
 function showWidgetGuide() {
-  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && "ontouchend" in document);
+  const ios = isIOS() || (/Macintosh/.test(navigator.userAgent) && "ontouchend" in document);
   const secAnd = `
     <div class="wg-sec">🤖 安卓（Chrome）</div>
     <p class="share-hint">先「添加到主屏幕」装成应用，然后<b>长按课壳图标</b> → 弹出「今日课程」「下节课」，点击直达。</p>`;
@@ -2460,14 +2452,10 @@ function showWidgetGuide() {
     <p class="share-hint">iOS 把长按菜单和小组件留给原生 App，网页应用加不了。官方替代：用「快捷指令」做一个直达图标，约 1 分钟：</p>
     <p class="share-hint">① 打开「快捷指令」App → 右上角 ＋ 新建<br>② 添加操作 → 搜索「URL」→ 选「打开 URL」<br>③ 填入下面的链接：<code class="wg-url">https://jiad88376-coder.github.io/kebiao-ucas/?view=next</code><br>④ 点顶部名字改成「下节课」→ 底部分享 ⤴ →「添加到主屏幕」</p>
     <p class="share-hint">之后桌面多一个「下节课」图标，点一下直接弹出下一节课的卡片。想加「今日课程」就把链接结尾换成 <code>?view=today</code> 再做一条。</p>`;
-  showModal(`
-    <div class="modal-card">
-      <h3>⏰ 桌面快捷方式</h3>
-      <p class="share-hint">小组件（Widget）是原生 App 专属，网页应用做不到；能做到的最接近形态如下。</p>
-      ${ios ? secIos + secAnd : secAnd + secIos}
-      <div class="modal-actions"><button class="ok" id="wgOk">知道了</button></div>
-    </div>`);
-  $("wgOk").addEventListener("click", hideModal);
+  showInfoModal(`
+    <h3>⏰ 桌面快捷方式</h3>
+    <p class="share-hint">小组件（Widget）是原生 App 专属，网页应用做不到；能做到的最接近形态如下。</p>
+    ${ios ? secIos + secAnd : secAnd + secIos}`);
 }
 
 /* 云备份注册引导：未登录点"立即云备份"时展示（讲清楚价值，注册优先） */
@@ -2487,6 +2475,29 @@ function showCloudPitch() {
 }
 
 /* ---------------- 上传资料 ---------------- */
+/* 发帖/上传弹窗共用的课程下拉：@不关联课程 + 我的课表（preset 选中指定课程） */
+function fillCourseSelect(sel, emptyLabel, preset) {
+  const o0 = el("option"); o0.value = ""; o0.textContent = emptyLabel;
+  sel.appendChild(o0);
+  for (const code of state.codes) {
+    const c = courseMap[code];
+    if (!c) continue;
+    const o = el("option");
+    o.value = c.code;
+    o.textContent = "@ " + (c.name.length > 18 ? c.name.slice(0, 18) + "…" : c.name);
+    sel.appendChild(o);
+  }
+  if (preset) sel.value = preset;
+}
+/* 上传附件到私有存储桶（走反代），返回 {file_path,file_name,file_size}；失败 throw */
+async function uploadForumFile(f) {
+  const ext = (f.name.match(/\.[A-Za-z0-9]+$/) || [""])[0];
+  const path = authUser.id + "/" + Date.now() + ext;
+  const { error: uerr } = await withFailover((c) => c.storage.from("forum-files").upload(path, f, { upsert: false }));
+  if (uerr) throw uerr;
+  return { file_path: path, file_name: f.name, file_size: f.size };
+}
+
 function filesUploadModal() {
   showModal(`
     <div class="modal-card">
@@ -2507,17 +2518,7 @@ function filesUploadModal() {
   const pick = $("fuPick");
   const tip = $("fuTip");
   const sel = $("fuCourse");
-  const o0 = el("option"); o0.value = ""; o0.textContent = "不关联课程（全校共享）";
-  sel.appendChild(o0);
-  for (const code of state.codes) {
-    const c = courseMap[code];
-    if (!c) continue;
-    const o = el("option");
-    o.value = c.code;
-    o.textContent = "@ " + (c.name.length > 18 ? c.name.slice(0, 18) + "…" : c.name);
-    sel.appendChild(o);
-  }
-  if (forumCtx.course) sel.value = forumCtx.course;
+  fillCourseSelect(sel, "不关联课程（全校共享）", forumCtx.course);
   pick.addEventListener("click", () => fileIn.click());
   fileIn.addEventListener("change", () => {
     const f = fileIn.files[0];
@@ -2533,16 +2534,13 @@ function filesUploadModal() {
     const ok = $("fuOk");
     ok.disabled = true; ok.textContent = "上传中…";
     try {
-      const ext = (f.name.match(/\.[A-Za-z0-9]+$/) || [""])[0];
-      const path = authUser.id + "/" + Date.now() + ext;
-      const { error: uerr } = await supabaseClient.storage.from("forum-files").upload(path, f, { upsert: false });
-      if (uerr) throw uerr;
+      const fileMeta = await uploadForumFile(f);
       const name = f.name.length > 60 ? f.name.slice(0, 60) : f.name;
-      const { error } = await supabaseClient.from("forum_posts").insert({
+      const { error } = await withFailover((c) => c.from("forum_posts").insert({
         user_id: authUser.id, author: authorShort(authUser.email),
         title: "📎 " + name, content: note, course_code: code,
-        file_path: path, file_name: f.name, file_size: f.size
-      });
+        file_path: fileMeta.file_path, file_name: fileMeta.file_name, file_size: fileMeta.file_size
+      }));
       if (error) throw error;
       hideModal();
       toast("资料已上传 📎");
@@ -2599,7 +2597,8 @@ function installDismissed() {
   try { const t = Number(localStorage.getItem(INSTALL_KEY)) || 0; return t && Date.now() - t < 7 * 86400e3; } catch (e) { return false; }
 }
 function installHintText() {
-  return /iphone|ipad|ipod/i.test(navigator.userAgent)
+  if (IS_WECHAT) return "微信内无法安装：右上角 ⋯ →「在浏览器打开」";
+  return isIOS()
     ? "Safari 底部「分享 ⬆️」→ 添加到主屏幕"
     : "浏览器菜单 →「安装应用 / 添加到主屏幕」";
 }
@@ -2612,21 +2611,17 @@ function maybeShowInstallBar() {
   bar.classList.remove("hidden");
 }
 function showInstallGuide() {
-  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  showModal(`
-    <div class="modal-card">
-      <h3>📲 把课壳装成 App</h3>
-      <div class="inst-steps">
-        <p>${ios
-          ? "① 用 <b>Safari</b> 打开本页<br>② 点底部中间的「分享 ⬆️」<br>③ 选「<b>添加到主屏幕</b>」→ 添加"
-          : "① 点浏览器右上角「⋮」菜单<br>② 选「<b>安装应用</b>」或「添加到主屏幕」"}</p>
-        <p class="share-hint">${IS_WECHAT
-          ? "微信 / QQ 内无法安装：先点右上角「…」→「在浏览器打开」"
-          : "装好后桌面直达 · 离线也能看课表 · 通知类功能更强"}</p>
-      </div>
-      <div class="modal-actions"><button class="ok" id="igOk">知道了</button></div>
+  const ios = isIOS();
+  showInfoModal(`
+    <h3>📲 把课壳装成 App</h3>
+    <div class="inst-steps">
+      <p>${ios
+        ? "① 用 <b>Safari</b> 打开本页<br>② 点底部中间的「分享 ⬆️」<br>③ 选「<b>添加到主屏幕</b>」→ 添加"
+        : "① 点浏览器右上角「⋮」菜单<br>② 选「<b>安装应用</b>」或「添加到主屏幕」"}</p>
+      <p class="share-hint">${IS_WECHAT
+        ? "微信 / QQ 内无法安装：先点右上角「…」→「在浏览器打开」"
+        : "装好后桌面直达 · 离线也能看课表 · 通知类功能更强"}</p>
     </div>`);
-  $("igOk").addEventListener("click", hideModal);
 }
 if (typeof window !== "undefined") {
   window.addEventListener("beforeinstallprompt", (e) => {
@@ -2846,9 +2841,9 @@ async function loadForumList() {
   body.appendChild(el("div", "f-loading", "加载中…"));
   let posts;
   try {
-    const { data, error } = await supabaseClient.from("forum_posts")
+    const { data, error } = await withFailover((c) => c.from("forum_posts")
       .select("id,user_id,author,title,content,created_at,course_code,file_path,file_name,file_size")
-      .eq("is_deleted", false).order("created_at", { ascending: false }).limit(100);
+      .eq("is_deleted", false).order("created_at", { ascending: false }).limit(100));
     if (error) throw error;
     posts = data || [];
   } catch (e) {
@@ -2912,7 +2907,7 @@ function renderForumPosts(posts) {
     meta.appendChild(el("span", "", authorShort(p.author)));
     meta.appendChild(el("span", "", fmtTime(p.created_at)));
     if (mine(p.user_id)) meta.appendChild(delBtn("删除这条帖子？", () =>
-      supabaseClient.from("forum_posts").delete().eq("id", p.id), () => loadForumList()));
+      withFailover((c) => c.from("forum_posts").delete().eq("id", p.id)), () => loadForumList()));
     card.appendChild(meta);
     card.addEventListener("click", () => showForum("post", { postId: p.id }));
     body.appendChild(card);
@@ -3009,7 +3004,7 @@ function renderForumPost(id, post, replies) {
   meta.appendChild(el("span", "", authorShort(post.author)));
   meta.appendChild(el("span", "", fmtTime(post.created_at)));
   if (mine(post.user_id)) meta.appendChild(delBtn("删除这条帖子？", () =>
-    supabaseClient.from("forum_posts").delete().eq("id", post.id), closeForum));
+    withFailover((c) => c.from("forum_posts").delete().eq("id", post.id)), closeForum));
   main.appendChild(meta);
   body.appendChild(main);
 
@@ -3019,7 +3014,7 @@ function renderForumPost(id, post, replies) {
     rc.appendChild(el("div", "f-reply-head", authorShort(r.author) + " · " + fmtTime(r.created_at)));
     rc.appendChild(el("div", "f-reply-content", r.content));
     if (mine(r.user_id)) rc.appendChild(delBtn("删除这条回复？", () =>
-      supabaseClient.from("forum_replies").delete().eq("id", r.id), () => loadForumPost(id)));
+      withFailover((c) => c.from("forum_replies").delete().eq("id", r.id)), () => loadForumPost(id)));
     body.appendChild(rc);
   }
 
@@ -3039,9 +3034,9 @@ function renderForumPost(id, post, replies) {
     if (t.length > 2000) { toast("回复过长（≤2000 字）"); return; }
     btn.disabled = true; btn.textContent = "发送中…";
     try {
-      const { error } = await supabaseClient.from("forum_replies").insert({
+      const { error } = await withFailover((c) => c.from("forum_replies").insert({
         post_id: id, user_id: authUser.id, author: authorShort(authUser.email), content: t
-      });
+      }));
       if (error) throw error;
       toast("回复成功");
       forumDetailMem.delete("p:" + id);
@@ -3084,19 +3079,7 @@ function composeForumPost(presetCourse) {
   const attach = $("fpAttach");
   const fileIn = $("fpFile");
   const fileTip = $("fpFileTip");
-  const o0 = el("option");
-  o0.value = "";
-  o0.textContent = "@ 不关联课程";
-  sel.appendChild(o0);
-  for (const code of state.codes) {
-    const c = courseMap[code];
-    if (!c) continue;
-    const o = el("option");
-    o.value = c.code;
-    o.textContent = "@ " + (c.name.length > 18 ? c.name.slice(0, 18) + "…" : c.name);
-    sel.appendChild(o);
-  }
-  if (presetCourse) sel.value = presetCourse;
+  fillCourseSelect(sel, "@ 不关联课程", presetCourse);
   attach.addEventListener("click", () => fileIn.click());
   fileIn.addEventListener("change", () => {
     const f = fileIn.files[0];
@@ -3123,17 +3106,10 @@ function composeForumPost(presetCourse) {
     ok.disabled = true;
     ok.textContent = f ? "上传中…" : "发布中…";
     try {
-      let fileMeta = null;
-      if (f) {
-        const ext = (f.name.match(/\.[A-Za-z0-9]+$/) || [""])[0];
-        const path = authUser.id + "/" + Date.now() + ext;
-        const { error: uerr } = await supabaseClient.storage.from("forum-files").upload(path, f, { upsert: false });
-        if (uerr) throw uerr;
-        fileMeta = { file_path: path, file_name: f.name, file_size: f.size };
-      }
-      const { error } = await supabaseClient.from("forum_posts").insert(Object.assign({
+      const fileMeta = f ? await uploadForumFile(f) : null;
+      const { error } = await withFailover((c) => c.from("forum_posts").insert(Object.assign({
         user_id: authUser.id, author: authorShort(authUser.email), title: t, content: c, course_code: code
-      }, fileMeta));
+      }, fileMeta)));
       if (error) throw error;
       hideModal();
       toast("发布成功");
@@ -3154,7 +3130,7 @@ function composeForumPost(presetCourse) {
 async function downloadForumFile(p) {
   try {
     toast("开始下载…");
-    const { data, error } = await supabaseClient.storage.from("forum-files").download(p.file_path);
+    const { data, error } = await withFailover((c) => c.storage.from("forum-files").download(p.file_path));
     if (error) throw error;
     const url = URL.createObjectURL(data);
     const a = el("a");
@@ -3259,16 +3235,11 @@ function init() {
     /* 邀请链接落地（?ref=尾号） */
     const ref = String(params.get("ref") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 8);
     if (ref && !state.codes.length) {
-      showModal(`
-        <div class="modal-card">
-          <div class="auth-logo">🎁</div>
-          <h3>同学邀请你来用「课壳」</h3>
-          <p class="share-hint">邀请码尾号 ${ref}<br>粘贴课程代码，3 秒生成整学期课表</p>
-          <div class="modal-actions">
-            <button class="ok" id="refGo">开始生成课表</button>
-          </div>
-        </div>`);
-      $("refGo").addEventListener("click", hideModal);
+      showInfoModal(`
+        <div class="auth-logo">🎁</div>
+        <h3>同学邀请你来用「课壳」</h3>
+        <p class="share-hint">邀请码尾号 ${ref}<br>粘贴课程代码，3 秒生成整学期课表</p>`,
+        "开始生成课表", "ok", "refGo");
     }
   }
 
@@ -3306,6 +3277,10 @@ function init() {
 
 /* ---------------- 微信/QQ 内置浏览器引导（无法安装 PWA） ---------------- */
 const IS_WECHAT = (typeof navigator !== "undefined") && /MicroMessenger|QQ\//i.test(navigator.userAgent);
+/* 苹果移动设备（iPhone / iPad / iPod）；桌面触屏 Mac 例外由调用方自行判断 */
+function isIOS() {
+  return typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
 function showWxGuide() {
   if (!IS_WECHAT) return;
   try { if (sessionStorage.getItem("kebiao:wxguide") === "1") return; } catch (e) {}
@@ -3346,6 +3321,16 @@ function applySchoolConfig(cfg) {
   viewDay = window.innerWidth <= 640 ? dayIndexOfToday() : 0;
 }
 
+/* 数据就绪后的公共启动尾巴（init/统计/云同步/SW 注册） */
+function startApp() {
+  init();
+  statsPing();
+  if (authUser) pullAndMerge();
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  }
+}
+
 async function loadSchoolAndStart(sid) {
   try {
     const cfgRes = await fetch("./data/schools/" + sid + ".json");
@@ -3360,12 +3345,7 @@ async function loadSchoolAndStart(sid) {
     courseMap = {};
     for (const c of catalog.courses) courseMap[c.code] = c;
 
-    init();
-    statsPing();
-    if (authUser) pullAndMerge();
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
-    }
+    startApp();
   } catch (err) {
     console.error("loadSchool", err);
     toast("该校数据加载失败，请检查网络后刷新");
@@ -3519,12 +3499,7 @@ async function legacyStart() {
       viewWeek = getSemesterWeek(new Date());
       viewDay = window.innerWidth <= 640 ? dayIndexOfToday() : 0;
     }
-    init();
-    statsPing();
-    if (authUser) pullAndMerge();
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
-    }
+    startApp();
   } catch (e) {
     toast("课程库加载失败，请检查网络后刷新");
   }
@@ -3538,8 +3513,9 @@ if (typeof module !== "undefined" && module.exports) {
     getSemesterWeek, inWeekSet, fmtWeekRange, SEMESTER_MONDAY, MAX_WEEK,
     weekMonday, nearestCourseDay,
     effSlot,
-    buildICS, icsDateFor,
+    buildICS, icsDateFor, periodHM,
     findNextClass, todayRemainingClasses,
+    dateStrOf, todayStr, esc, wmoIcon, wmoShort,
     __setRecords: (o) => { state.records = o || {}; } /* 仅供测试注入微调数据 */
   };
 }
