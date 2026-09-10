@@ -859,6 +859,12 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 [data-theme="dark"] .school-item:hover { border-color: #33508f; }
 [data-theme="dark"] .sug-item:hover { background: #222836; }
 
+/* ---------- 消息提醒（Web Push） ---------- */
+.push-pref { display: flex; align-items: center; gap: 9px; padding: 9px 2px; font-size: 14px; color: var(--text); cursor: pointer; }
+.push-pref input { width: 16px; height: 16px; accent-color: var(--primary); flex: none; }
+.push-warn { margin: 4px 0 8px; padding: 9px 11px; border-radius: 9px; background: #fff7e8; border: 1px solid #f0dcb4; color: #9a6a1a; font-size: 12.5px; line-height: 1.55; }
+[data-theme="dark"] .push-warn { background: #33290f; border-color: #5a4a1a; color: #e0c06a; }
+
 /* ---------- 尊重"减弱动态效果" ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

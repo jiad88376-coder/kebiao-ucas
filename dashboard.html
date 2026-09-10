@@ -81,7 +81,7 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
   <section class="panel">
     <h2>线路状态（实时探测 · 与前端 PROXY_SOURCES 一致）</h2>
     <div class="cap" id="srcBox"></div>
-    <p class="note">双源惰性切换：默认走主线路 CF Worker（自有域名 api.courseshell.cloud），遇到网络类错误自动轮换备胎重试；每次调用最多切换 1 次，下次会话自动回到主线路。监测数据读取同样走这套双源切换。EdgeOne 备胎站点已被平台回收下线，重新部署后加一行即可恢复。</p>
+    <p class="note">双源惰性切换：默认走主线路 CF Worker（自有域名 api.courseshell.cloud），遇到网络类错误自动轮换备胎重试；每次调用失败最多切换 1 次（每次会话累计最多 2 次），下次会话自动回到主线路。监测数据读取同样走这套双源切换。EdgeOne 备胎站点已被平台回收下线，重新部署后加一行即可恢复。</p>
   </section>
   <section class="panel">
     <h2>承载水位（估算 · 最坏口径）</h2>

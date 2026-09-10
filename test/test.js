@@ -192,5 +192,44 @@ ok(app.wmoIcon(95) === "⛈" && app.wmoShort(95) === "雷雨", "95 → 雷雨");
 ok(app.wmoIcon(999) === "⛈" && app.wmoShort(999) === "雷雨", "95+ 一律按雷雨（保持原口径）");
 ok(app.wmoIcon(88) === "⛈" && app.wmoShort(88) === "变天", "未覆盖码段 → 兜底");
 
+console.log("== buildReminderJobs（Web Push 提醒任务） ==");
+/* 2026-09-08 周二 12:00（第2周） */
+const pushNow = new Date(2026, 8, 8, 12, 0);
+const pCourses = [
+  { code: "R1", name: "测试课一", sessions: [{ day: 2, p1: 5, p2: 6, room: "R56", weekSet: [[1, 18]] }] },
+  { code: "R2", name: "测试课二", sessions: [{ day: 3, p1: 1, p2: 2, room: "R12", weekSet: [[1, 18]] }] }
+];
+const pRecords = {
+  R1: {
+    homework: [
+      { id: "h1", title: "习题2", due: "2026-09-09", done: false },
+      { id: "h2", title: "已完成的", due: "2026-09-09", done: true }
+    ],
+    exams: [{ id: "e1", type: "期中", date: "2026-09-09", time: "14:00" }]
+  }
+};
+const pJobs = app.buildReminderJobs(pCourses, pRecords, pushNow, 30);
+const byTag = (t) => pJobs.find(j => j.tag === t);
+let jj = byTag("m-2026-09-09");
+ok(!!jj && jj.title === "今天 1 节课" && jj.body.includes("8:30 测试课二（R12）"), "早间课表：次日有课生成");
+ok(!byTag("m-2026-09-08"), "早间课表：当天 7:30 已过不生成");
+jj = byTag("m-2026-09-15");
+ok(!!jj && jj.body.includes("13:30 测试课一（R56）"), "早间课表：按课表时刻生成");
+ok(jj && new Date(jj.due_at).getHours() === 7 && new Date(jj.due_at).getMinutes() === 30, "早间任务定在本地 7:30");
+jj = byTag("d-2026-09-08");
+ok(!!jj && jj.title === "明天有 2 个截止" && jj.body.includes("习题2") && jj.body.includes("期中 14:00"), "晚间 DDL：未完成作业+考试合并，已完成不计");
+ok(jj && new Date(jj.due_at).getHours() === 20 && new Date(jj.due_at).getMinutes() === 0, "晚间任务定在本地 20:00");
+jj = byTag("w-2026-09-13");
+ok(!!jj && jj.title === "下周 2 节课" && jj.body.includes("首节：周二 13:30 测试课一（R56）"), "周日晚：下周预览");
+ok(jj && new Date(jj.due_at).getHours() === 19 && new Date(jj.due_at).getMinutes() === 0, "周预览定在周日 19:00");
+app.__setRecords({ R1: { tweaks: { "2-5-6": { room: "新教室" } } } });
+jj = app.buildReminderJobs(pCourses, {}, pushNow, 30).find(j => j.tag === "m-2026-09-15");
+ok(!!jj && jj.body.includes("新教室"), "早间课表尊重用户改教室");
+app.__setRecords({});
+const offJobs = app.buildReminderJobs(pCourses, pRecords, pushNow, 30, { morning: false, ddl: true, weekly: false });
+ok(!offJobs.some(j => j.tag.startsWith("m-")) && !offJobs.some(j => j.tag.startsWith("w-")), "偏好关闭后不再生成对应任务");
+ok(offJobs.some(j => j.tag.startsWith("d-")), "偏好保留的 DDL 任务仍在");
+ok(app.buildReminderJobs([], {}, pushNow, 30).length === 0, "空课表不生成任务");
+
 console.log(`\n通过 ${passed} 项测试`);
 if (process.exitCode) { console.error("存在失败项"); process.exit(1); }

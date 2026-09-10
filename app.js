@@ -139,7 +139,7 @@ let viewDay = 0;  // 手机端默认聚焦今天(0=全周)；桌面端全周；�
 /* supabase.co 在国内被 GFW 阻断，全部云端流量走免费反代。
    双源择优: CF Worker(自有域名 api.courseshell.cloud, 全球边缘) + Netlify(海外)。
    EdgeOne 备胎已下线（站点被回收），如重新部署加一行即可。
-   启动时默认主线路；遇到网络类错误自动轮换备胎并保持，每次调用最多切换 2 次。 */
+   启动时默认主线路；遇到网络类错误自动轮换备胎并保持，每次调用失败最多切 1 次、每次会话累计最多切 2 次。 */
 const SUPABASE_KEY = "sb_publishable_ONe5Ft1rxeRt-rcdruXYoQ_sM0jgwLn";
 const PROXY_SOURCES = [
   { id: "cf", base: "https://api.courseshell.cloud", path: "" },
@@ -523,7 +523,7 @@ function saveState() {
     localStorage.setItem(LAST_MODIFIED_KEY, String(Date.now()));
   }
   catch (e) { toast("保存失败（存储空间不足？）"); }
-  if (typeof document !== "undefined") schedulePush();
+  if (typeof document !== "undefined") { schedulePush(); queuePushJobsRefresh(); }
 }
 
 function recordsOf(code) {
@@ -1686,6 +1686,282 @@ function showAlarmModal(code) {
   showModal(card);
 }
 
+/* ---------------- 消息提醒（Web Push） ----------------
+   浏览器级推送（非系统日历）：iOS 16.4+ 需先「添加到主屏幕」再从桌面图标打开；
+   安卓视浏览器与推送服务而定（国内部分机型收不到，可继续用系统日历提醒）。
+   订阅登记在 Supabase；提醒内容在本机算好（复用周次/微调逻辑），
+   由 Netlify 定时函数（netlify/functions/push-sender.mjs）按 due_at 定时投递。 */
+const VAPID_PUBLIC = "BHzTjhhJwd1u0OqAm3spdw7Wxlvgr3XDwHUeTFUZ0NCmzj6IfePXZpajw-UkkWGMYtHJQJCOPJSSbhyx-sA-eEQ";
+const PUSH_PREFS_KEY = "kebiao:pushprefs";
+const PUSH_JOBS_AT_KEY = "kebiao:pushjobsat";
+const PUSH_JOBS_HASH_KEY = "kebiao:pushjobshash";
+const PUSH_REFRESH_MIN_MS = 6 * 60 * 60 * 1000; /* 课表没变时，6 小时才重算一次任务 */
+const PUSH_HORIZON_DAYS = 30;                    /* 提前算好未来 30 天 */
+let pushSubscription = null;
+let pushRefreshTimer = null;
+let pushBusy = false;
+
+function pushPrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PUSH_PREFS_KEY) || "{}");
+    return { morning: p.morning !== false, ddl: p.ddl !== false, weekly: p.weekly !== false };
+  } catch (e) { return { morning: true, ddl: true, weekly: true }; }
+}
+function savePushPrefs(p) {
+  try { localStorage.setItem(PUSH_PREFS_KEY, JSON.stringify(p)); } catch (e) {}
+}
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+function pushSupported() {
+  return typeof navigator !== "undefined" && "serviceWorker" in navigator &&
+    "PushManager" in window && "Notification" in window;
+}
+function pushBlockedReason() {
+  if (!pushSupported()) return "当前浏览器不支持消息提醒";
+  if (isIOS() && !isStandalone()) return "iPhone/iPad 请先「添加到主屏幕」，再从桌面图标打开来开启";
+  if (IS_WECHAT) return "微信/QQ 内无法开启，请点右上角 ⋯ 用系统浏览器打开";
+  if (Notification.permission === "denied") return "通知权限被拒绝：请在浏览器/系统设置里允许通知后再试";
+  return "";
+}
+
+/* 生成未来 days 天的提醒任务（纯逻辑，可测）：
+   - 早间课表：每天 7:30，当天有课才发
+   - 晚间 DDL：每天 20:00，次日有未完成作业 / 考试才发
+   - 周日晚预览：周日 19:00，下周有课才发 */
+function buildReminderJobs(courses, records, now, days, prefs) {
+  days = days || PUSH_HORIZON_DAYS;
+  prefs = prefs || { morning: true, ddl: true, weekly: true };
+  const byCode = {};
+  for (const c of (courses || [])) if (c) byCode[c.code] = c;
+  const jobs = [];
+  const day0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayAt = (date, h, m) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), h, m, 0, 0);
+  const add = (due, title, body, url, tag) => {
+    if (due > now) jobs.push({ due_at: due.toISOString(), title, body, url, tag });
+  };
+  const dayClasses = (date, ds, wk, dayIdx) => {
+    const list = [];
+    const seen = new Set();
+    for (const c of (courses || [])) {
+      if (!c) continue;
+      for (const s of (c.sessions || [])) {
+        const k = c.code + "|" + sessKey(s);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const es = effSlot(c.code, s, ds);
+        if (es.day !== dayIdx) continue;
+        if (s.weekSet && s.weekSet.length && !inWeekSet(s.weekSet, wk)) continue;
+        const t1 = periodHM(es.p1, false);
+        if (!t1) continue;
+        list.push({ c, p1: es.p1, t1, room: effRoom(c, s, ds) });
+      }
+    }
+    list.sort((a, b) => a.p1 - b.p1);
+    return list;
+  };
+  for (let off = 0; off < days; off++) {
+    const date = new Date(day0.getFullYear(), day0.getMonth(), day0.getDate() + off);
+    const ds = dateStrOf(date);
+    const wk = getSemesterWeek(date);
+    const dayIdx = dayIndexOfDate(date);
+    /* 早间：今日课程 */
+    if (prefs.morning) {
+      const list = dayClasses(date, ds, wk, dayIdx);
+      if (list.length) {
+        const brief = list.slice(0, 3).map(x => x.t1 + " " + x.c.name + (x.room ? "（" + x.room + "）" : "")).join(" · ");
+        add(dayAt(date, 7, 30), "今天 " + list.length + " 节课", brief + (list.length > 3 ? " 等" : ""), "./?view=today", "m-" + ds);
+      }
+    }
+    /* 周日晚：下周预览 */
+    if (prefs.weekly && dayIdx === 7) {
+      const mon = weekMonday(wk + 1);
+      let total = 0, firstLine = "";
+      for (let d = 0; d < 7; d++) {
+        const dd = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + d);
+        const ds2 = dateStrOf(dd);
+        const list = dayClasses(dd, ds2, getSemesterWeek(dd), dayIndexOfDate(dd));
+        if (list.length) {
+          total += list.length;
+          if (!firstLine) {
+            const x = list[0];
+            firstLine = "首节：周" + "一二三四五六日"[d] + " " + x.t1 + " " + x.c.name + (x.room ? "（" + x.room + "）" : "");
+          }
+        }
+      }
+      if (total) add(dayAt(date, 19, 0), "下周 " + total + " 节课", firstLine, "./", "w-" + ds);
+    }
+    /* 晚间：明日 DDL / 考试 */
+    if (prefs.ddl) {
+      const tmr = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+      const tds = dateStrOf(tmr);
+      const ddl = [];
+      for (const code of Object.keys(records || {})) {
+        const rec = records[code];
+        if (!rec) continue;
+        const name = (byCode[code] && byCode[code].name) || code;
+        for (const h of (rec.homework || [])) {
+          if (!h.done && h.due === tds) ddl.push(name + " " + h.title);
+        }
+        for (const ex of (rec.exams || [])) {
+          if (ex.date === tds) ddl.push(name + " " + (ex.type || "考试") + (ex.time ? " " + ex.time : ""));
+        }
+      }
+      if (ddl.length) {
+        add(dayAt(date, 20, 0), "明天有 " + ddl.length + " 个截止",
+          ddl.slice(0, 3).join(" · ") + (ddl.length > 3 ? " 等" : ""), "./", "d-" + ds);
+      }
+    }
+  }
+  jobs.sort((a, b) => a.due_at.localeCompare(b.due_at));
+  return jobs;
+}
+
+async function pushGetReg() {
+  if (!("serviceWorker" in navigator)) throw new Error("设备不支持");
+  return await navigator.serviceWorker.ready;
+}
+/* 订阅 + 偏好登记到云端（RPC 以 endpoint 作凭证） */
+async function pushSyncSub() {
+  if (!pushSubscription || !supabaseClient || !online()) return;
+  const j = pushSubscription.toJSON ? pushSubscription.toJSON() : pushSubscription;
+  const keys = j.keys || {};
+  let did = null; try { did = localStorage.getItem(DID_KEY); } catch (e) {}
+  const r = await withFailover((c) => c.rpc("push_upsert_sub", {
+    p_endpoint: pushSubscription.endpoint,
+    p_p256dh: keys.p256dh || "",
+    p_auth: keys.auth || "",
+    p_did: did,
+    p_prefs: pushPrefs(),
+    p_user: authUser ? authUser.id : null
+  }));
+  if (r && r.error) throw new Error(r.error.message || "订阅保存失败");
+}
+async function refreshPushJobs(force) {
+  try {
+    if (!supabaseClient || !online() || !pushSubscription) return;
+    const at = Number(localStorage.getItem(PUSH_JOBS_AT_KEY)) || 0;
+    const h = stateHash();
+    let prev = null; try { prev = localStorage.getItem(PUSH_JOBS_HASH_KEY); } catch (e) {}
+    /* 内容没变且 6 小时内 → 跳过；课表/记录一变（hash 不同）就重算 */
+    if (!force && h === prev && Date.now() - at < PUSH_REFRESH_MIN_MS) return;
+    const courses = state.codes.map(c => courseMap[c]).filter(Boolean);
+    const jobs = buildReminderJobs(courses, state.records, new Date(), PUSH_HORIZON_DAYS, pushPrefs());
+    const r = await withFailover((c) => c.rpc("push_replace_jobs", { p_endpoint: pushSubscription.endpoint, p_jobs: jobs }));
+    if (r && r.error) throw new Error(r.error.message || "任务写入失败");
+    try {
+      localStorage.setItem(PUSH_JOBS_AT_KEY, String(Date.now()));
+      localStorage.setItem(PUSH_JOBS_HASH_KEY, h);
+    } catch (e) {}
+  } catch (e) { console.warn("push jobs", e); }
+}
+/* 课表/记录变化后防抖重算（正在开启提醒的设备才走网络） */
+function queuePushJobsRefresh() {
+  if (!pushSubscription) return;
+  clearTimeout(pushRefreshTimer);
+  pushRefreshTimer = setTimeout(() => refreshPushJobs(false), 4000);
+}
+async function enablePush() {
+  if (!supabaseClient) { toast("云服务未就绪，请稍后再试"); return; }
+  const perm = await Notification.requestPermission(); /* 必须由点击手势触发 */
+  if (perm !== "granted") { toast("未获得通知权限"); return; }
+  const reg = await pushGetReg();
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC) });
+  }
+  pushSubscription = sub;
+  await pushSyncSub();
+  await refreshPushJobs(true);
+  toast("已开启消息提醒 🔔");
+}
+async function disablePush() {
+  try {
+    const reg = await pushGetReg();
+    const sub = pushSubscription || await reg.pushManager.getSubscription();
+    if (sub) {
+      if (supabaseClient && online()) {
+        try { await withFailover((c) => c.rpc("push_remove_sub", { p_endpoint: sub.endpoint })); } catch (e) {}
+      }
+      try { await sub.unsubscribe(); } catch (e) {}
+    }
+  } catch (e) {}
+  pushSubscription = null;
+  try {
+    localStorage.removeItem(PUSH_JOBS_AT_KEY);
+    localStorage.removeItem(PUSH_JOBS_HASH_KEY);
+  } catch (e) {}
+  toast("已关闭消息提醒");
+}
+async function initPush() {
+  if (!pushSupported()) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub && Notification.permission === "granted") {
+      /* 权限还在但订阅丢了（清缓存/轮换）：静默补订 */
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC) });
+    }
+    if (!sub) return;
+    pushSubscription = sub;
+    await pushSyncSub();
+    refreshPushJobs(false);
+  } catch (e) { console.warn("push init", e); }
+}
+function showPushModal() {
+  const supported = pushSupported();
+  const blocked = pushBlockedReason();
+  const on = !!pushSubscription && typeof Notification !== "undefined" && Notification.permission === "granted";
+  const prefs = pushPrefs();
+  const card = el("div", "modal-card");
+  card.appendChild(el("h3", "", "🔔 消息提醒（手机推送）"));
+  card.appendChild(el("p", "share-hint", "到点由课壳直接推送：每天早上今日课程、晚上明日 DDL、周日晚下周预览。与课程抽屉里的「系统日历提醒」相互独立，可同时使用。"));
+  if (blocked) card.appendChild(el("p", "push-warn", "⚠️ " + blocked));
+  const mkPref = (key, label) => {
+    const row = el("label", "push-pref");
+    const cb = el("input"); cb.type = "checkbox"; cb.checked = !!prefs[key];
+    cb.addEventListener("change", () => {
+      const p = pushPrefs(); p[key] = cb.checked; savePushPrefs(p);
+      if (pushSubscription) pushSyncSub().then(() => refreshPushJobs(true)).catch(() => {});
+      toast(cb.checked ? "已开启该类提醒" : "已关闭该类提醒");
+    });
+    row.appendChild(cb);
+    const t = el("span"); t.textContent = label;
+    row.appendChild(t);
+    return row;
+  };
+  card.appendChild(mkPref("morning", "每天早上 7:30 · 今日课程"));
+  card.appendChild(mkPref("ddl", "每天晚上 20:00 · 明日作业 / 考试"));
+  card.appendChild(mkPref("weekly", "周日晚上 19:00 · 下周课表预览"));
+  if (supported && !blocked) {
+    const btn = el("button", "r-btn", on ? "关闭消息提醒" : "开启消息提醒");
+    btn.addEventListener("click", async () => {
+      if (pushBusy) return;
+      pushBusy = true;
+      btn.disabled = true; btn.textContent = "处理中…";
+      try {
+        if (on) await disablePush(); else await enablePush();
+        hideModal();
+        setTimeout(showPushModal, 300); /* 重开弹窗刷新状态 */
+      } catch (e) {
+        console.warn(e);
+        toast("操作失败：" + ((e && e.message) || e));
+        btn.disabled = false; btn.textContent = on ? "关闭消息提醒" : "开启消息提醒";
+      } finally { pushBusy = false; }
+    });
+    card.appendChild(btn);
+  }
+  const close = el("button", "r-btn ghost", "关闭");
+  close.addEventListener("click", hideModal);
+  card.appendChild(close);
+  showModal(card);
+}
+
 /* ---------------- 课程详情抽屉 ---------------- */
 let drawerCourse = null;
 let drawerTab = "notes";
@@ -2416,6 +2692,7 @@ function showMoreMenu() {
         <button class="menu-item" id="mmSearch"><span class="mi-ico">🔍</span><span>添加课程（搜索）</span></button>
         <button class="menu-item" id="mmSync"><span class="mi-ico">☁</span><span>立即云备份</span></button>
         <button class="menu-item" id="mmInstall"><span class="mi-ico">📲</span><span>安装成手机 App</span></button>
+        <button class="menu-item" id="mmPush"><span class="mi-ico">🔔</span><span>消息提醒（手机推送）</span></button>
         <button class="menu-item" id="mmWidget"><span class="mi-ico">⏰</span><span>桌面快捷方式 / 下节课直达</span></button>
         <button class="menu-item" id="mmCodes"><span class="mi-ico">⌨️</span><span>粘贴课程代码</span></button>
         <button class="menu-item" id="mmBackup"><span class="mi-ico">⤓</span><span>备份与恢复</span></button>
@@ -2427,6 +2704,7 @@ function showMoreMenu() {
     hideModal();
     showInstallGuide();
   });
+  $("mmPush").addEventListener("click", () => { hideModal(); showPushModal(); });
   $("mmSync").addEventListener("click", () => {
     hideModal();
     if (!supabaseClient) { toast("云服务未就绪"); return; }
@@ -3327,7 +3605,7 @@ function startApp() {
   statsPing();
   if (authUser) pullAndMerge();
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+    navigator.serviceWorker.register("./sw.js").then(() => initPush()).catch(() => {});
   }
 }
 
@@ -3516,6 +3794,7 @@ if (typeof module !== "undefined" && module.exports) {
     buildICS, icsDateFor, periodHM,
     findNextClass, todayRemainingClasses,
     dateStrOf, todayStr, esc, wmoIcon, wmoShort,
+    buildReminderJobs,
     __setRecords: (o) => { state.records = o || {}; } /* 仅供测试注入微调数据 */
   };
 }

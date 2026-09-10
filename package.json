@@ -1,0 +1,8 @@
+{
+  "name": "kebiao-ucas",
+  "private": true,
+  "description": "课壳 · 国科大课程表（静态 PWA + Netlify Functions；唯一依赖供消息提醒定时投递）",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}
