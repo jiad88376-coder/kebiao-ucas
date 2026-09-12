@@ -2660,6 +2660,7 @@ function esc(s) {
 }
 
 const THANKS = [
+  { name: "Ad infinitum", amount: "¥1", date: "2026-09-12" },
   { name: "一灯大师", amount: "¥1", date: "2026-09-09" },
   { name: "09090054", amount: "¥5", date: "2026-09-09" },
   { name: "09081202", amount: "¥1", date: "2026-09-08" },
