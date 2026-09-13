@@ -138,7 +138,7 @@ let viewDay = 0;  // 手机端默认聚焦今天(0=全周)；桌面端全周；�
 /* ---------------- 云同步 (Supabase, 经反代) ---------------- */
 /* supabase.co 在国内被 GFW 阻断，全部云端流量走免费反代。
    双源择优: CF Worker(自有域名 api.courseshell.cloud, 全球边缘) + Netlify(海外)。
-   EdgeOne 备胎已下线（站点被回收），如重新部署加一行即可。
+   EdgeOne 备胎已下线（站点被回收，其函数文件已精简移除，需要时从 git 历史恢复）。
    启动时默认主线路；遇到网络类错误自动轮换备胎并保持，每次调用失败最多切 1 次、每次会话累计最多切 2 次。 */
 const SUPABASE_KEY = "sb_publishable_ONe5Ft1rxeRt-rcdruXYoQ_sM0jgwLn";
 const PROXY_SOURCES = [
