@@ -1379,6 +1379,74 @@ async function fillWeatherCard(strip, mini, card, date, dd) {
   }
 }
 
+/* ---------------- 赞助位（单日视图 · 天气栏下方） ----------------
+   主页只展示一条（按天轮换），点「详情 ▸」看完整广告。维护方式同 THANKS：手工编辑 SPONSORS；
+   数组留空 [] 即整栏隐藏。字段：
+   icon 图标emoji / title 栏内一句话 / tag 角标（如"广告"，可省略） / detail 详情正文（\n 换行）
+   url 跳转链接（可省略） / urlLabel 按钮文案（默认"了解更多"） / img 详情页图片路径（可省略） */
+const SPONSORS = [
+  { icon: "🔔", title: "开启每日推送：早课表 / 晚 DDL，不再错过", tag: "新功能",
+    detail: "课壳现在能直接给你发推送：\n· 每天 7:30 今日课程\n· 每天 20:00 明日作业 / 考试\n· 周日 19:00 下周课表\n\n开启路径：「更多」→「消息提醒（手机推送）」（iPhone 需先添加到主屏幕）" },
+  // { icon: "🎁", title: "赞助位招租", tag: "广告", detail: "正文…", url: "https://…", urlLabel: "了解详情", img: "./sponsors/1.jpg" },
+];
+
+function buildSponsorBar() {
+  if (!SPONSORS.length) return null;
+  const s = SPONSORS[Math.floor(Date.now() / 86400000) % SPONSORS.length]; /* 按天轮换 */
+  const bar = el("button", "sponsor-bar");
+  bar.type = "button";
+  if (s.icon) bar.appendChild(el("span", "spn-ico", s.icon));
+  bar.appendChild(el("span", "spn-title", s.title));
+  if (s.tag) bar.appendChild(el("span", "spn-tag", s.tag));
+  bar.appendChild(el("span", "spn-more", "详情 ▸"));
+  bar.addEventListener("click", () => showSponsorModal(SPONSORS.indexOf(s)));
+  return bar;
+}
+
+function showSponsorModal(idx) {
+  const s = SPONSORS[idx];
+  if (!s) return;
+  const card = el("div", "modal-card sponsor-card");
+  const head = el("div", "spn-head");
+  head.appendChild(el("span", "spn-big-ico", s.icon || "📣"));
+  const hb = el("div", "spn-head-t");
+  hb.appendChild(el("h3", "", s.title || "赞助位"));
+  if (s.tag) hb.appendChild(el("span", "spn-tag", s.tag));
+  head.appendChild(hb);
+  card.appendChild(head);
+  if (s.img) {
+    const im = el("img", "spn-img");
+    im.src = s.img; im.alt = ""; im.loading = "lazy";
+    im.addEventListener("click", () => viewNoteImage(s.img));
+    card.appendChild(im);
+  }
+  if (s.detail) card.appendChild(el("p", "spn-detail", s.detail));
+  if (s.url) {
+    const go = el("button", "r-btn", s.urlLabel || "了解更多");
+    go.addEventListener("click", () => { try { window.open(s.url, "_blank", "noopener"); } catch (e) {} });
+    card.appendChild(go);
+  }
+  const others = SPONSORS.map((x, i) => ({ x, i })).filter(o => o.i !== idx);
+  if (others.length) {
+    const sec = el("div", "spn-others");
+    sec.appendChild(el("div", "spn-others-t", "更多赞助"));
+    for (const o of others) {
+      const row = el("button", "spn-others-row");
+      row.type = "button";
+      if (o.x.icon) row.appendChild(el("span", "spn-ico", o.x.icon));
+      row.appendChild(el("span", "spn-title", o.x.title));
+      row.appendChild(el("span", "spn-more", "查看 ▸"));
+      row.addEventListener("click", () => showSponsorModal(o.i));
+      sec.appendChild(row);
+    }
+    card.appendChild(sec);
+  }
+  const close = el("button", "r-btn ghost", "关闭");
+  close.addEventListener("click", hideModal);
+  card.appendChild(close);
+  showModal(card);
+}
+
 function renderDayView(courses) {
   const grid = $("grid");
   grid.classList.add("hidden");
@@ -1429,6 +1497,10 @@ function renderDayView(courses) {
   /* 天气卡片置顶（当天且在预报范围内才出现，空课日也显示） */
   const wxCard = buildWeatherCard();
   if (wxCard) host.appendChild(wxCard);
+
+  /* 赞助位：天气栏与课程分段之间，单条展示（空课日也显示） */
+  const spBar = buildSponsorBar();
+  if (spBar) host.appendChild(spBar);
 
   /* 彩蛋上下文：日期/时段/星期/节数/明天第一节 */
   const eggCtx = buildEggCtx(viewWeek, viewDay, blocks, courses);

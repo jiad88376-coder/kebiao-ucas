@@ -865,6 +865,30 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .push-warn { margin: 4px 0 8px; padding: 9px 11px; border-radius: 9px; background: #fff7e8; border: 1px solid #f0dcb4; color: #9a6a1a; font-size: 12.5px; line-height: 1.55; }
 [data-theme="dark"] .push-warn { background: #33290f; border-color: #5a4a1a; color: #e0c06a; }
 
+/* ---------- 赞助栏（单日视图 · 天气栏下方） ---------- */
+.sponsor-bar { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px;
+  border-radius: var(--radius); background: rgba(216, 146, 22, .08); border: 1px solid rgba(216, 146, 22, .22);
+  cursor: pointer; color: var(--text); text-align: left; }
+.sponsor-bar:active { background: rgba(216, 146, 22, .15); }
+.spn-ico { font-size: 16px; flex: none; line-height: 1; }
+.spn-title { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spn-tag { flex: none; font-size: 10px; line-height: 1.5; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 0 5px; }
+.spn-more { flex: none; color: var(--primary); font-size: 11.5px; font-weight: 600; }
+.sponsor-card .spn-head { display: flex; align-items: flex-start; gap: 10px; }
+.spn-big-ico { font-size: 26px; line-height: 1.3; flex: none; }
+.spn-head-t { flex: 1; min-width: 0; }
+.spn-head-t h3 { margin: 0; font-size: 16px; line-height: 1.45; }
+.spn-head-t .spn-tag { display: inline-block; margin-top: 5px; }
+.spn-img { display: block; width: 100%; border-radius: 12px; margin: 10px 0 0; cursor: zoom-in; }
+.spn-detail { margin: 12px 0 0; font-size: 13.5px; line-height: 1.8; white-space: pre-line; }
+.spn-others { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.spn-others-t { font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
+.spn-others-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 10px;
+  border: 1px solid var(--line); border-radius: 10px; background: transparent; cursor: pointer; color: var(--text); text-align: left; }
+.spn-others-row:active { background: var(--bg); }
+[data-theme="dark"] .sponsor-bar { background: rgba(216, 146, 22, .1); border-color: rgba(216, 146, 22, .3); }
+[data-theme="dark"] .spn-others-row { background: #262b37; border-color: #3a4358; }
+
 /* ---------- 尊重"减弱动态效果" ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
