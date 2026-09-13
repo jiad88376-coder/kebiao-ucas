@@ -1386,7 +1386,8 @@ async function fillWeatherCard(strip, mini, card, date, dd) {
    url 跳转链接（可省略） / urlLabel 按钮文案（默认"了解更多"） / img 详情页图片路径（可省略） */
 const SPONSORS = [
   { icon: "🍖", title: "赞助：烤骨头火锅自助，领课壳专属优惠", tag: "广告",
-    detail: "烤骨头火锅自助 × 课壳\n课壳用户专属优惠进行中\n\n优惠领取方式与适用详情，请到店咨询或联系课壳管理员\n\n感谢商家赞助，支持课壳持续免费" },
+    detail: "楠大厨 · 烤骨头火锅自助 × 课壳\n课壳用户专属优惠进行中\n\n📍 地址：中国北京市怀柔区北园213号\n\n👇 扫下方二维码进群，领「43元烤骨头火锅不限量」课壳专属价\n（群码 9月20日前有效，过期请联系课壳管理员更新）\n\n感谢商家赞助，支持课壳持续免费",
+    img: "./sponsors/kaogutou-group-qr-0912.jpg" },
   // { icon: "🎁", title: "一句话标题", tag: "广告", detail: "正文…支持\n换行", url: "https://…", urlLabel: "了解详情", img: "./sponsors/1.jpg" },
 ];
 
