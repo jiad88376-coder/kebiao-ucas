@@ -1385,9 +1385,9 @@ async function fillWeatherCard(strip, mini, card, date, dd) {
    icon 图标emoji / title 栏内一句话 / tag 角标（如"广告"，可省略） / detail 详情正文（\n 换行）
    url 跳转链接（可省略） / urlLabel 按钮文案（默认"了解更多"） / img 详情页图片路径（可省略） */
 const SPONSORS = [
-  { icon: "🔔", title: "开启每日推送：早课表 / 晚 DDL，不再错过", tag: "新功能",
-    detail: "课壳现在能直接给你发推送：\n· 每天 7:30 今日课程\n· 每天 20:00 明日作业 / 考试\n· 周日 19:00 下周课表\n\n开启路径：「更多」→「消息提醒（手机推送）」（iPhone 需先添加到主屏幕）" },
-  // { icon: "🎁", title: "赞助位招租", tag: "广告", detail: "正文…", url: "https://…", urlLabel: "了解详情", img: "./sponsors/1.jpg" },
+  { icon: "🍖", title: "赞助：烤骨头火锅自助，领课壳专属优惠", tag: "广告",
+    detail: "烤骨头火锅自助 × 课壳\n课壳用户专属优惠进行中\n\n优惠领取方式与适用详情，请到店咨询或联系课壳管理员\n\n感谢商家赞助，支持课壳持续免费" },
+  // { icon: "🎁", title: "一句话标题", tag: "广告", detail: "正文…支持\n换行", url: "https://…", urlLabel: "了解详情", img: "./sponsors/1.jpg" },
 ];
 
 function buildSponsorBar() {
