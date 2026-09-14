@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>广告后台 · 课壳</title>
+<link rel="icon" href="./icons/icon-192.png">
+<style>
+:root {
+  --bg: #f5f6fa; --card: #fff; --text: #1c2430; --muted: #7a8399; --line: #e6eaf2;
+  --primary: #2F6FED; --ok: #159957; --warn: #d97a1a; --amber: #b97a12;
+  --radius: 14px; --shadow: 0 6px 24px rgba(28, 36, 48, .08);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; padding-bottom: 60px; }
+header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; position: sticky; top: 0; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); z-index: 5; }
+.logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #3d82ff, #2F6FED); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; }
+header b { font-size: 15.5px; }
+#tokState { color: var(--muted); font-size: 12.5px; flex: 1; }
+button { font: inherit; cursor: pointer; }
+.ghost { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 9px; padding: 7px 12px; font-size: 13px; }
+.ghost:active { transform: scale(.97); }
+.primary { border: none; background: var(--primary); color: #fff; border-radius: 10px; padding: 11px 22px; font-size: 14.5px; font-weight: 600; }
+.primary:disabled { opacity: .5; cursor: default; }
+main { max-width: 760px; margin: 0 auto; padding: 16px 14px 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); margin-bottom: 14px; }
+h1 { font-size: 17px; margin: 0 0 6px; }
+.hint { color: var(--muted); font-size: 12.5px; margin: 4px 0 10px; }
+input[type=text], input[type=password], textarea { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; font: inherit; color: var(--text); background: var(--bg); outline: none; }
+input:focus, textarea:focus { border-color: var(--primary); background: #fff; }
+textarea { min-height: 110px; resize: vertical; line-height: 1.7; }
+label.f { display: block; margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+label.f input, label.f textarea { margin-top: 4px; font-size: 14px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.row3 { display: grid; grid-template-columns: 70px 1fr 110px; gap: 10px; }
+.switch { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text); cursor: pointer; }
+.switch input { width: 16px; height: 16px; accent-color: var(--primary); }
+.ad-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.ad-head .no { background: var(--primary); color: #fff; border-radius: 8px; font-size: 12px; padding: 2px 8px; font-weight: 700; }
+.ad-head .mini { margin-left: auto; display: flex; gap: 6px; }
+.mini button { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 4px 9px; font-size: 12px; color: var(--muted); }
+.mini button:active { background: var(--bg); }
+.barprev { display: flex; align-items: center; gap: 8px; padding: 9px 11px; margin-top: 12px; border-radius: 10px; background: rgba(216,146,22,.08); border: 1px solid rgba(216,146,22,.25); font-size: 12.5px; color: var(--muted); }
+.barprev .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 600; }
+.imgs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.thumb { position: relative; width: 72px; height: 72px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #f2f4f9; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb .x { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; border: none; background: rgba(0,0,0,.55); color: #fff; font-size: 11px; line-height: 18px; padding: 0; text-align: center; }
+.thumb .new { position: absolute; left: 0; right: 0; bottom: 0; background: var(--primary); color: #fff; font-size: 9.5px; line-height: 1.4; text-align: center; }
+.thumb .new { position: absolute; left: 0; bottom: 0; right: 0; background: var(--primary); color: #fff; font-size: 9.5px; text-align: center; padding: 1px 0; }
+#addImgBtn { border: 1px dashed var(--line); background: transparent; color: var(--muted); border-radius: 10px; width: 72px; height: 72px; font-size: 20px; }
+#addImgBtn:active { background: var(--bg); }
+.toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+#remoteState { color: var(--muted); font-size: 12.5px; flex: 1; min-width: 140px; }
+.publishRow { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
+#pubState { font-size: 12.5px; color: var(--muted); }
+#pubState.ok { color: var(--ok); }
+#pubState.err { color: #d23b3b; }
+.note { color: var(--muted); font-size: 12px; margin: 12px 2px 0; line-height: 1.7; }
+a { color: var(--primary); text-decoration: none; }
+.ad-off { opacity: .55; }
+.errbox { background: #fdf0f0; border: 1px solid #f2caca; color: #b23b3b; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin: 10px 0; }
+[data-err-ok="1"] .errbox, .errbox:empty { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">课</span><b>广告后台</b>
+  <span id="tokState"></span>
+  <button id="btnLogout" class="ghost hidden">退出登录</button>
+</header>
+<main>
+
+  <section id="setup" class="card hidden">
+    <h1>🔐 连接仓库</h1>
+    <p class="hint">粘贴 GitHub Token（经典 Token，勾选 <b>repo</b> 权限）。Token 只保存在本机浏览器，不会上传到任何地方。</p>
+    <p class="hint"><a href="https://github.com/settings/tokens/new?scopes=repo&description=kebiao%20ad%20admin" target="_blank" rel="noopener">点此一键创建 Token（已预选 repo 权限）→</a></p>
+    <label class="f">GitHub Token
+      <input id="tokIn" type="password" placeholder="ghp_…" autocomplete="off">
+    </label>
+    <div style="margin-top:12px"><button id="tokGo" class="primary">保存并进入</button></div>
+    <p class="errbox"></p>
+  </section>
+
+  <section id="panel" class="hidden">
+    <div class="toolbar">
+      <span id="remoteState">读取中…</span>
+      <button id="btnReload" class="ghost">↻ 拉取线上</button>
+      <button id="btnAdd" class="ghost">＋ 新广告</button>
+    </div>
+    <div id="adList"></div>
+    <div class="card">
+      <div class="publishRow">
+        <button id="btnPublish" class="primary">🚀 一键发布</button>
+        <span id="pubState"></span>
+      </div>
+      <p class="note">发布 = 单个提交写入 main 分支，Netlify / GitHub Pages 自动部署，约 1–2 分钟生效；新图片自动使用新文件名，无需担心缓存。页面：手机打开课壳单日视图即可看到。</p>
+      <p class="errbox"></p>
+    </div>
+  </section>
+
+</main>
+<input type="file" id="filePick" accept="image/*" multiple hidden>
+
+<script>
+"use strict";
+const OWNER = "jiad88376-coder", REPO = "kebiao-ucas", BRANCH = "main";
+const API = "https://api.github.com";
+const TOK_KEY = "kebiao:admin:token";
+const $ = (id) => document.getElementById(id);
+function E(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+
+let token = "";
+try { token = localStorage.getItem(TOK_KEY) || ""; } catch (e) {}
+let ads = [];        /* 编辑中的广告数组；_new 为待上传新图 [{file, dataUrl}] */
+let pickTarget = -1;
+
+/* ---------- GitHub API ---------- */
+function headers() { return { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" }; }
+async function ghApi(path, opts) {
+  opts = opts || {};
+  const init = { method: opts.method || "GET", headers: headers() };
+  if (opts.body) { init.body = JSON.stringify(opts.body); init.headers = Object.assign({}, init.headers, { "content-type": "application/json" }); }
+  const r = await fetch(API + path, init);
+  if (!r.ok) {
+    const t = await r.text();
+    if (r.status === 401) throw new Error("Token 无效或已过期（401），请退出重新粘贴");
+    if (r.status === 403) throw new Error("权限不足或触发限流（403）：" + t.slice(0, 120));
+    throw new Error("HTTP " + r.status + " " + t.slice(0, 160));
+  }
+  return r.json();
+}
+function b64ToUtf8(b64) {
+  const bin = atob(String(b64).replace(/\s/g, ""));
+  return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+}
+function readAsDataURL(file) {
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+}
+
+/* ---------- Token ---------- */
+async function checkToken(t) {
+  const r = await fetch(`${API}/repos/${OWNER}/${REPO}`, { headers: { Authorization: "Bearer " + t, Accept: "application/vnd.github+json" } });
+  if (r.status === 401) throw new Error("Token 无效或已过期");
+  if (r.status === 403) throw new Error("该 Token 没有本仓库的访问权限");
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const d = await r.json();
+  if (d.permissions && d.permissions.push === false) throw new Error("该 Token 缺少推送（Contents 写）权限");
+  return d.full_name;
+}
+function showState() {
+  const on = !!token;
+  $("setup").classList.toggle("hidden", on);
+  $("panel").classList.toggle("hidden", !on);
+  $("btnLogout").classList.toggle("hidden", !on);
+  $("tokState").textContent = on ? `已连接 ${OWNER}/${REPO}` : "未连接";
+}
+$("tokGo").addEventListener("click", async () => {
+  const t = $("tokIn").value.trim();
+  errbox("setup", "");
+  if (!t) { errbox("setup", "请粘贴 Token"); return; }
+  $("tokGo").disabled = true;
+  try {
+    await checkToken(t);
+    token = t;
+    try { localStorage.setItem(TOK_KEY, t); } catch (e) {}
+    showState();
+    loadRemote();
+  } catch (e) { errbox("setup", "校验失败：" + (e.message || e)); }
+  $("tokGo").disabled = false;
+});
+$("tokIn").addEventListener("keydown", (e) => { if (e.key === "Enter") $("tokGo").click(); });
+$("btnLogout").addEventListener("click", () => {
+  token = ""; try { localStorage.removeItem(TOK_KEY); } catch (e) {}
+  ads = []; showState();
+});
+
+/* ---------- 线上数据 ---------- */
+async function loadRemote() {
+  $("remoteState").textContent = "拉取线上广告…";
+  try {
+    let list = [];
+    try {
+      const d = await ghApi(`/repos/${OWNER}/${REPO}/contents/data/sponsors.json?ref=${BRANCH}`);
+      list = JSON.parse(b64ToUtf8(d.content));
+      if (!Array.isArray(list)) list = [];
+    } catch (e) {
+      if (!/404/.test(e.message)) throw e; /* 文件尚不存在 → 空白开始 */
+    }
+    ads = list.map(normalize);
+    $("remoteState").textContent = `线上 ${ads.length} 条广告 · 拉取于 ${new Date().toTimeString().slice(0, 5)}`;
+    render();
+    pubState("", "");
+  } catch (e) {
+    $("remoteState").textContent = "";
+    errbox("panel", "拉取失败：" + (e.message || e));
+  }
+}
+function normalize(x) {
+  x = x && typeof x === "object" ? x : {};
+  return {
+    icon: x.icon || "", title: x.title || "", tag: x.tag || "",
+    on: x.on !== false, detail: x.detail || "", url: x.url || "", urlLabel: x.urlLabel || "",
+    img: Array.isArray(x.img) ? x.img.slice() : (x.img ? [x.img] : []),
+    _new: []
+  };
+}
+$("btnReload").addEventListener("click", loadRemote);
+
+/* ---------- 编辑 UI ---------- */
+$("btnAdd").addEventListener("click", () => {
+  ads.push(normalize({ on: true, urlLabel: "了解详情" }));
+  render();
+});
+function render() {
+  const box = $("adList");
+  box.innerHTML = "";
+  if (!ads.length) box.appendChild(E("div", "card", "暂无广告。点右上「＋ 新广告」创建，发布后主页才会出现赞助栏。"));
+  ads.forEach((ad, i) => box.appendChild(adCard(ad, i)));
+}
+function adCard(ad, i) {
+  const card = E("div", "card");
+  const head = E("div", "ad-head");
+  head.appendChild(E("span", "no", "#" + (i + 1)));
+  const on = E("label", "switch");
+  const cb = E("input"); cb.type = "checkbox"; cb.checked = ad.on !== false;
+  cb.addEventListener("change", () => { ad.on = cb.checked ? true : false; if (ad.on === true) delete ad.on; });
+  on.appendChild(cb); on.appendChild(E("span", "", "启用"));
+  head.appendChild(on);
+  const mini = E("div", "mini");
+  const up = E("button", "", "↑"); up.addEventListener("click", () => { if (i > 0) { [ads[i - 1], ads[i]] = [ads[i], ads[i - 1]]; render(); } });
+  const dn = E("button", "", "↓"); dn.addEventListener("click", () => { if (i < ads.length - 1) { [ads[i + 1], ads[i]] = [ads[i], ads[i + 1]]; render(); } });
+  const del = E("button", "", "删除"); del.addEventListener("click", () => { if (confirm("删除第 " + (i + 1) + " 条广告？发布后生效")) { ads.splice(i, 1); render(); } });
+  mini.appendChild(up); mini.appendChild(dn); mini.appendChild(del);
+  head.appendChild(mini);
+  card.appendChild(head);
+
+  const r3 = E("div", "row3");
+  r3.appendChild(labeled("图标", iconInput(ad), 0));
+  r3.appendChild(labeled("栏内标题（主页展示的一句话）", titleInput(ad), 0));
+  r3.appendChild(labeled("角标", tagInput(ad), 0));
+  card.appendChild(r3);
+  card.appendChild(labeled("详情正文（\\n 换行）", detailInput(ad)));
+  const r2 = E("div", "row2");
+  r2.appendChild(labeled("跳转链接（可选）", urlInput(ad), 0));
+  r2.appendChild(labeled("按钮文案", urlLabelInput(ad), 0));
+  card.appendChild(r2);
+
+  const imgs = E("div", "imgs");
+  (ad.img || []).forEach((src, k) => {
+    const th = E("div", "thumb");
+    const im = E("img"); im.src = src; im.loading = "lazy"; th.appendChild(im);
+    const x = E("button", "x", "×"); x.title = "移除";
+    x.addEventListener("click", () => { ad.img.splice(k, 1); render(); });
+    th.appendChild(x);
+    imgs.appendChild(th);
+  });
+  (ad._new || []).forEach((n, k) => {
+    const th = E("div", "thumb");
+    const im = E("img"); im.src = n.dataUrl; th.appendChild(im);
+    const x = E("button", "x", "×");
+    x.addEventListener("click", () => { ad._new.splice(k, 1); render(); });
+    th.appendChild(x);
+    th.appendChild(E("span", "new", "新"));
+    imgs.appendChild(th);
+  });
+  const addBtn = E("button", "", "＋"); addBtn.id = "addImgBtn"; addBtn.title = "添加图片";
+  addBtn.addEventListener("click", () => { pickTarget = i; $("filePick").value = ""; $("filePick").click(); });
+  imgs.appendChild(addBtn);
+  card.appendChild(imgs);
+
+  const prev = E("div", "barprev");
+  prev.appendChild(E("span", "", ad.icon || "📣"));
+  prev.appendChild(E("span", "t", (ad.title || "（未填标题）") + (ad.on === false ? "　[已停用]" : "")));
+  if (ad.tag) prev.appendChild(E("span", "", "[" + ad.tag + "]"));
+  prev.appendChild(E("span", "", "详情 ▸"));
+  card.appendChild(prev);
+  return card;
+}
+function labeled(label, input, mt) {
+  const l = E("label", "f"); l.appendChild(E("span", "", label)); l.appendChild(input);
+  if (mt === 0) l.style.marginTop = "0";
+  return l;
+}
+function iconInput(ad) { const n = E("input"); n.type = "text"; n.value = ad.icon || ""; n.placeholder = "🍖"; n.maxLength = 4; n.addEventListener("input", () => { ad.icon = n.value.trim(); }); return n; }
+function titleInput(ad) { const n = E("input"); n.type = "text"; n.value = ad.title || ""; n.placeholder = "一句话，12 字内最佳"; n.addEventListener("input", () => { ad.title = n.value; }); return n; }
+function tagInput(ad) { const n = E("input"); n.type = "text"; n.value = ad.tag || ""; n.placeholder = "广告 / 新功能"; n.maxLength = 6; n.addEventListener("input", () => { ad.tag = n.value.trim(); }); return n; }
+function detailInput(ad) { const n = E("textarea"); n.value = ad.detail || ""; n.placeholder = "详情页正文…"; n.addEventListener("input", () => { ad.detail = n.value; }); return n; }
+function urlInput(ad) { const n = E("input"); n.type = "text"; n.value = ad.url || ""; n.placeholder = "https://…"; n.addEventListener("input", () => { ad.url = n.value.trim(); }); return n; }
+function urlLabelInput(ad) { const n = E("input"); n.type = "text"; n.value = ad.urlLabel || ""; n.placeholder = "了解详情"; n.addEventListener("input", () => { ad.urlLabel = n.value.trim(); }); return n; }
+
+$("filePick").addEventListener("change", async () => {
+  const i = pickTarget;
+  const files = Array.from($("filePick").files || []);
+  $("filePick").value = "";
+  if (i < 0 || !files.length) return;
+  for (const f of files) {
+    if (!/^image\//.test(f.type)) { alert("仅支持图片文件：" + f.name); continue; }
+    if (f.size > 1024 * 1024) { alert("图片超过 1MB，请先压缩：" + f.name); continue; }
+    try { ads[i]._new.push({ file: f, dataUrl: await readAsDataURL(f) }); }
+    catch (e) { alert("读取失败：" + f.name); }
+  }
+  render();
+});
+
+/* ---------- 发布 ---------- */
+function cleanAds() {
+  return ads.map((ad) => {
+    const o = {};
+    if (ad.icon) o.icon = ad.icon;
+    if ((ad.title || "").trim()) o.title = ad.title.trim();
+    if (ad.tag) o.tag = ad.tag;
+    if (ad.on === false) o.on = false;
+    if (ad.detail) o.detail = ad.detail;
+    if (ad.url) o.url = ad.url;
+    if (ad.urlLabel) o.urlLabel = ad.urlLabel;
+    const imgs = (ad.img || []).filter(Boolean);
+    if (imgs.length) o.img = imgs;
+    return o;
+  }).filter((o) => o.title);
+}
+$("btnPublish").addEventListener("click", async () => {
+  if (ads.length && !ads.some((a) => (a.title || "").trim())) { errbox("panel", "每条广告至少要有标题（或全部删除后直接发布 = 下架）"); return; }
+  const newCount = ads.reduce((n, a) => n + (a._new ? a._new.length : 0), 0);
+  if (!confirm(`将发布 ${ads.length} 条广告（${newCount} 张新图）到 main 分支，确定？`)) return;
+  const btn = $("btnPublish");
+  btn.disabled = true; pubState("发布中…", "");
+  errbox("panel", "");
+  try {
+    const msg = "chore: sponsor ads via admin console (" + new Date().toISOString().slice(0, 16).replace("T", " ") + ")";
+    const head = (await ghApi(`/repos/${OWNER}/${REPO}/git/ref/heads/${BRANCH}`)).object.sha;
+    const entries = [];
+    for (const ad of ads) {
+      for (let k = 0; k < (ad._new || []).length; k++) {
+        const n = ad._new[k];
+        const ext = (n.file.name.match(/\.(jpe?g|png|webp|gif)$/i) || [, "jpg"])[1].toLowerCase();
+        const d = new Date();
+        const stamp = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0") + String(d.getHours()).padStart(2, "0") + String(d.getMinutes()).padStart(2, "0");
+        const path = `sponsors/sponsor-${stamp}-${ads.indexOf(ad) + 1}-${k + 1}.${ext}`;
+        const blob = await ghApi(`/repos/${OWNER}/${REPO}/git/blobs`, { method: "POST", body: JSON.stringify({ content: (await readAsDataURL(n.file)).split(",")[1], encoding: "base64" }) });
+        entries.push({ path, mode: "100644", type: "blob", sha: blob.sha });
+        ad.img.push("./" + path);
+      }
+      ad._new = [];
+    }
+    const list = cleanAds(); /* 新图路径写入 ad.img 之后再序列化 */
+    entries.push({ path: "data/sponsors.json", mode: "100644", type: "blob", content: JSON.stringify(list, null, 2) + "\n" });
+    const tree = await ghApi(`/repos/${OWNER}/${REPO}/git/trees`, { method: "POST", body: JSON.stringify({ base_tree: head, tree: entries }) });
+    const commit = await ghApi(`/repos/${OWNER}/${REPO}/git/commits`, { method: "POST", body: JSON.stringify({ message: msg, tree: tree.sha, parents: [head] }) });
+    await ghApi(`/repos/${OWNER}/${REPO}/git/refs/heads/${BRANCH}`, { method: "PATCH", body: JSON.stringify({ sha: commit.sha, force: false }) });
+    pubState(`✅ 已发布（${commit.sha.slice(0, 7)}），1–2 分钟后生效`, "ok");
+    render();
+    setTimeout(loadRemote, 1200);
+  } catch (e) {
+    if (/422/.test(String(e.message))) errbox("panel", "main 分支有新提交（冲突），请点「↻ 拉取线上」后重试发布");
+    else errbox("panel", "发布失败：" + (e.message || e));
+    pubState("", "err");
+  } finally { btn.disabled = false; }
+});
+function pubState(text, cls) { const n = $("pubState"); n.textContent = text; n.className = cls || ""; }
+function errbox(scope, text) { const box = $(scope).querySelector(".errbox"); if (box) box.textContent = text || ""; }
+
+showState();
+if (token) loadRemote();
+</script>
+</body>
+</html>

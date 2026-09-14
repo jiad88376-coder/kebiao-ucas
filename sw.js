@@ -9,6 +9,7 @@ const ASSETS = [
   "./vendor/supabase.min.js",
   "./manifest.json",
   "./data/schools.json",
+  "./data/sponsors.json",
   "./data/schools/ucas.json",
   "./data/schools/ucas-catalog.json",
   "./data/schools/hias.json",
@@ -20,7 +21,7 @@ const ASSETS = [
   "./icons/apple-touch-icon.png"
 ];
 /* 核心代码走"网络优先"：在线必拿最新版，离线回落缓存 */
-const CORE = ["index.html", "dashboard.html", "app.js", "style.css", "manifest.json"];
+const CORE = ["index.html", "dashboard.html", "app.js", "style.css", "manifest.json", "sponsors.json"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(

@@ -1380,16 +1380,21 @@ async function fillWeatherCard(strip, mini, card, date, dd) {
 }
 
 /* ---------------- 赞助位（单日视图 · 天气栏下方） ----------------
-   主页只展示一条（按天轮换），点「详情 ▸」看完整广告。维护方式同 THANKS：手工编辑 SPONSORS；
-   数组留空 [] 即整栏隐藏。字段：
-   icon 图标emoji / title 栏内一句话 / tag 角标（如"广告"，可省略） / detail 详情正文（\n 换行）
-   url 跳转链接（可省略） / urlLabel 按钮文案（默认"了解更多"） / img 详情页图片（路径或数组，可省略） */
-const SPONSORS = [
-  { icon: "🍖", title: "赞助：烤骨头火锅自助，领课壳专属优惠", tag: "广告",
-    detail: "楠大厨 · 烤骨头火锅自助 × 课壳\n课壳用户专属优惠进行中\n\n📍 地址：中国北京市怀柔区北园213号\n\n👇 扫下方二维码进群，领「43元烤骨头火锅不限量」课壳专属价\n（群码 9月20日前有效，过期请联系课壳管理员更新）\n\n感谢商家赞助，支持课壳持续免费",
-    img: ["./sponsors/kaogutou-group-qr-0912.jpg", "./sponsors/kaogutou-store-0913.jpg"] },
-  // { icon: "🎁", title: "一句话标题", tag: "广告", detail: "正文…支持\n换行", url: "https://…", urlLabel: "了解详情", img: "./sponsors/1.jpg" },
-];
+   数据在 data/sponsors.json：网页后台 admin.html 可视化维护（编辑/传图/一键发布），
+   也可手工编辑该 JSON 提交。on:false 的条目不展示；数组为空即整栏隐藏。字段：
+   icon 图标emoji / title 栏内一句话 / tag 角标（如"广告"） / on 启用开关（缺省=启用）
+   detail 详情正文（\n 换行） / url 跳转链接（可省略） / urlLabel 按钮文案（默认"了解更多"）
+   img 详情页图片（路径或数组，可省略） */
+let SPONSORS = [];
+
+async function loadSponsors() {
+  try {
+    const r = await fetch("./data/sponsors.json");
+    if (!r.ok) return;
+    const d = await r.json();
+    if (Array.isArray(d)) SPONSORS = d.filter(x => x && x.title && x.on !== false);
+  } catch (e) {}
+}
 
 function buildSponsorBar() {
   if (!SPONSORS.length) return null;
@@ -3678,7 +3683,8 @@ function applySchoolConfig(cfg) {
 }
 
 /* 数据就绪后的公共启动尾巴（init/统计/云同步/SW 注册） */
-function startApp() {
+async function startApp() {
+  try { await loadSponsors(); } catch (e) {} /* 广告数据就位后再首屏渲染 */
   init();
   statsPing();
   if (authUser) pullAndMerge();
