@@ -1,8 +1,13 @@
-/* 消息提醒投递 · Netlify 定时函数
- * 每 10 分钟扫一次到期任务（cron 为 UTC：23/11/12 点 = 北京时间 7/19/20 点窗口）。
- * 环境变量（Netlify → Site configuration → Environment variables）：
+/* 消息提醒投递 · GitHub Actions 定时任务
+ * 从 netlify/functions/push-sender.mjs 平移而来：Netlify 账户免费额度用尽后整站被平台暂停，
+ * 定时函数一并停止，导致所有推送静默失效。改由 Actions 触发后，投递链路不再依赖任何
+ * 有额度上限的托管平台（公开仓库的 Actions 额度对本项目量级绰绰有余）。
+ *
+ * 每 10 分钟扫一次到期任务（workflow cron 为 UTC：23/11/12/13 点 = 北京 7/19/20/21 点窗口）。
+ * 环境变量（仓库 Settings → Secrets and variables → Actions）：
+ *   SUPABASE_URL（可省，代码内有默认值）
  *   SUPABASE_SERVICE_KEY / VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT
- * 手动测试：Netlify UI → Functions → push-sender → Run now
+ * 手动测试：Actions → push-sender → Run workflow
  */
 import webpush from "web-push";
 
@@ -13,8 +18,6 @@ const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@courseshell.cloud";
 const STALE_MIN = 45; /* 过期超过这么久直接作废，避免早上收到昨晚的提醒 */
 
-export const config = { schedule: "*/10 23,11,12 * * *" };
-
 function headers() {
   return { apikey: SERVICE_KEY, Authorization: "Bearer " + SERVICE_KEY, "content-type": "application/json" };
 }
@@ -24,10 +27,11 @@ async function api(path, opts = {}) {
   return res;
 }
 
-export default async () => {
+async function main() {
   if (!SERVICE_KEY || !VAPID_PUBLIC || !VAPID_PRIVATE) {
-    console.error("push-sender: 缺少环境变量（SUPABASE_SERVICE_KEY / VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY）");
-    return new Response("missing env", { status: 500 });
+    console.error("push-sender: 缺少 Secrets（SUPABASE_SERVICE_KEY / VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY）");
+    process.exitCode = 1;
+    return;
   }
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
 
@@ -38,7 +42,7 @@ export default async () => {
   );
   const jobs = await jobsRes.json();
 
-  /* 并发投递，最后按结果批量清理数据库（30 秒执行限制内足够） */
+  /* 并发投递，最后按结果批量清理数据库 */
   const results = await Promise.allSettled(jobs.map(async (j) => {
     const sub = j.push_subscriptions;
     const ageMin = (Date.now() - Date.parse(j.due_at)) / 60000;
@@ -74,8 +78,9 @@ export default async () => {
   const sent = vals.filter((v) => v.kind === "sent").length;
   const stale = vals.filter((v) => v.kind === "drop").length;
   console.log(`[push] 到期 ${jobs.length} 条：成功 ${sent} · 失效订阅 ${dead.length} · 失败待重试 ${retry.length} · 过期作废 ${stale}`);
-  return new Response(
-    JSON.stringify({ ok: true, due: jobs.length, sent, dead: dead.length, retry: retry.length, stale }),
-    { status: 200, headers: { "content-type": "application/json" } }
-  );
-};
+}
+
+main().catch((e) => {
+  console.error("push-sender 失败：", e);
+  process.exitCode = 1;
+});

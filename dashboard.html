@@ -81,12 +81,12 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
   <section class="panel">
     <h2>线路状态（实时探测 · 与前端 PROXY_SOURCES 一致）</h2>
     <div class="cap" id="srcBox"></div>
-    <p class="note">双源惰性切换：默认走主线路 CF Worker（自有域名 api.courseshell.cloud），遇到网络类错误自动轮换备胎重试；每次调用失败最多切换 1 次（每次会话累计最多 2 次），下次会话自动回到主线路。监测数据读取同样走这套双源切换。EdgeOne 备胎站点已被平台回收下线（函数文件已精简移除，需要时从 git 历史恢复）。</p>
+    <p class="note">当前只有一条线路：CF Worker（自有域名 api.courseshell.cloud，全球边缘），监测数据读取也走它。历史上曾有两条备胎 —— EdgeOne 站点被平台回收下线；Netlify 于 v50 摘除（其静态站与函数同址，账户免费额度用尽后整站被平台暂停，保留一个必然失败的备胎只会让故障路径多撞一次死站）。前端的 <code>withFailover</code> 轮换机制保留未删：将来接入第二个源时，两侧 PROXY_SOURCES 各追加一条即恢复「遇到网络类错误自动轮换重试、每次调用最多切 1 次（会话累计最多 2 次）」的行为。</p>
   </section>
   <section class="panel">
     <h2>承载水位（估算 · 最坏口径）</h2>
     <div id="meters"></div>
-    <p class="note">口径：每次打开 ≈ 1.5 次云端调用（同步节流 + 论坛缓存后）。水位按「全部流量都走该线路」的最坏情况估算——实际上主线路 CF 承接几乎全部流量，Netlify 只在故障切换时短暂接手，其真实占用远低于所示。Supabase 数据库/存储目前仅几 MB，≈0%，暂不画条。</p>
+    <p class="note">口径：每次打开 ≈ 1.5 次云端调用（同步节流 + 论坛缓存后）。当前所有流量都走 CF Worker 这一条线，水位即实际占用。Supabase 数据库/存储目前仅几 MB，≈0%，暂不画条。</p>
   </section>
   <section class="panel">
     <h2>论坛生态（累计）</h2>
@@ -104,10 +104,10 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
   <section class="panel">
     <h2>当前架构一览</h2>
     <div class="cap">
-      <div class="c primary"><b>前端 · GitHub Pages</b><span>SW v39：核心文件网络优先（绕 HTTP 缓存），课程库缓存优先 + 后台自愈；宣传域名 kebiao.courseshell.cloud（301 跳转）</span></div>
+      <div class="c primary"><b>前端 · GitHub Pages</b><span>SW v39：核心文件走协商缓存（条件请求，未变则 CDN 返回 304、零正文），课程库缓存优先 + 后台自愈；宣传域名 kebiao.courseshell.cloud（301 跳转）</span></div>
       <div class="c"><b>学校 · 一校三地</b><span>国科大校本部（默认 · 京区三校区）+ 国科大杭高院（直属京外教育基地 · 杭州 · 157 门课）+ 国科大海洋学院（海洋所依托 · 青岛基地 · 92 门课），选校页支持别名搜索</span></div>
       <div class="c"><b>云端 · Supabase</b><span>认证 / 云同步 / 笔记附件 / 论坛 / 统计，RLS 全锁</span></div>
-      <div class="c"><b>线路 · 双源反代</b><span>api.courseshell.cloud（CF Worker）→ Netlify，惰性故障切换</span></div>
+      <div class="c"><b>线路 · 单源反代</b><span>api.courseshell.cloud（CF Worker）· 当前无备胎，轮换机制保留待接入</span></div>
       <div class="c"><b>域名 · courseshell.cloud</b><span>阿里云注册 · Cloudflare DNS（kayden / lia）· 自定义域绑定 Worker</span></div>
     </div>
   </section>
@@ -117,7 +117,7 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
       <div class="c"><b>CF Workers</b><span>10 万请求/天（≈300 万/月）· 主线路，日活 3 万内无压力</span></div>
       <div class="c"><b>GitHub Pages</b><span>带宽约 100GB/月 · 静态资源，数千日活无压力</span></div>
       <div class="c"><b>Supabase</b><span>数据库 500MB · 存储 1GB · 出流量 5GB/月 · Auth 5 万月活</span></div>
-      <div class="c"><b>Netlify Functions</b><span>12.5 万次/月 · 备胎，仅在主线路故障时消耗</span></div>
+      <div class="c"><b>Netlify（已摘除）</b><span>v50 起不再使用 · 教训：其免费额度是账户级共享池，用尽即暂停整站（含 Functions），不是只停部署</span></div>
     </div>
     <p class="note">口径说明：打开次数 = 每次进入网站 +1（会话内去重）；独立设备 = 当天去重后的随机设备 ID 数。连续多日 >100 时建议升级方案。</p>
   </section>
@@ -125,13 +125,18 @@ main { max-width: 860px; margin: 0 auto; padding: 16px 14px 0; }
 <div id="errbox"></div>
 <script>
 var API_KEY = "sb_publishable_ONe5Ft1rxeRt-rcdruXYoQ_sM0jgwLn";
-/* 双源定义（与 app.js PROXY_SOURCES 保持一致；cf 的 path 为空 = 直透 Supabase 路径） */
+/* 线路定义（与 app.js PROXY_SOURCES 保持一致；cf 的 path 为空 = 直透 Supabase 路径）
+   v50 起备胎已摘除，数组结构保留：将来追加第二个源即可自动恢复轮换与探测展示 */
 var SOURCES = [
-  { id: "cf",      label: "CF Worker", role: "主线路 · api.courseshell.cloud", base: "https://api.courseshell.cloud", path: "" },
-  { id: "netlify", label: "Netlify",   role: "备胎 · 海外函数",                base: "https://kebiao-ucas.netlify.app", path: "/.netlify/functions/supabase" }
+  { id: "cf", label: "CF Worker", role: "唯一线路 · api.courseshell.cloud", base: "https://api.courseshell.cloud", path: "" }
 ];
 /* 免费额度常量 */
-var CAP = { cfDay: 100000, cfMonth: 3000000, funcMonth: 125000, pagesMonthMB: 102400 };
+var CAP = { cfDay: 100000, cfMonth: 3000000, pagesMonthMB: 102400 };
+/* 每次打开的实测传输量（gzip 后，见「项目使用说明 §七 缓存与发版」）：
+   首次访问 ≈ 0.19 MB（核心 64 KB + 课程库 90 KB + vendor 与图标）
+   复发访问 ≈ 0.003 MB（仅条件请求头；文件未变时 CDN 返回 304、正文 0 字节）
+   水位按保守值 0.15 MB/次 估算，宁可高估 */
+var MB_PER_OPEN = 0.15;
 
 function meter(label, used, cap, unit) {
   var pct = Math.min(100, used / cap * 100);
@@ -202,8 +207,7 @@ function render(rows, s) {
   document.getElementById("meters").innerHTML =
     meter("CF Worker · 今日", today.opens * 1.5, CAP.cfDay, "次") +
     meter("CF Worker · 本月", sum30 * 1.5, CAP.cfMonth, "次") +
-    meter("Netlify · 本月（备胎，正常≈0）", sum30 * 1.5, CAP.funcMonth, "次") +
-    meter("GitHub Pages 带宽 · 本月", sum30 * 1.5, CAP.pagesMonthMB, "MB");
+    meter("GitHub Pages 带宽 · 本月", sum30 * MB_PER_OPEN, CAP.pagesMonthMB, "MB");
   drawChart(rows.slice(0, 30).reverse());
   var live = document.getElementById("live");
   if (hasToday) {
@@ -254,7 +258,7 @@ function load() {
       loadSupport();
     })
     .catch(function (e) {
-      document.getElementById("live").textContent = "🔴 无法连接数据源（双源均失败）";
+      document.getElementById("live").textContent = "🔴 无法连接数据源（线路不可达）";
       document.getElementById("live").className = "live old";
       document.getElementById("errbox").innerHTML = '<div class="err">数据加载失败：' + (e.message || e) + '</div>';
     });

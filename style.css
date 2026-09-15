@@ -63,6 +63,7 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
   border-radius: 9px; padding: 5px 10px; font-size: 13px; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex: none;
   height: 34px; white-space: nowrap;
+  position: relative; /* 未读红点 .n-dot 是 absolute，宿主必须提供定位上下文 */
 }
 .ib-ico { font-size: 14px; line-height: 1; }
 .more-ico { font-size: 17px; font-weight: 700; letter-spacing: 1px; margin-top: -3px; }
@@ -888,6 +889,77 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .spn-others-row:active { background: var(--bg); }
 [data-theme="dark"] .sponsor-bar { background: rgba(216, 146, 22, .1); border-color: rgba(216, 146, 22, .3); }
 [data-theme="dark"] .spn-others-row { background: #262b37; border-color: #3a4358; }
+
+/* ---------- 今日一漂（话题墙 × 漂流瓶） ---------- */
+#drift { max-width: 760px; margin: 0 auto; padding: 10px 8px 40px; }
+.drift-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  position: sticky; top: 49px; z-index: 20; background: var(--bg); padding: 4px 0;
+}
+.drift-body { display: flex; flex-direction: column; gap: 12px; }
+
+.drift-topic { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 15px; }
+.drift-topic-day { font-size: 11.5px; color: var(--muted); letter-spacing: .5px; }
+.drift-topic-q { font-size: 19px; font-weight: 700; line-height: 1.5; margin: 7px 0 0; }
+.drift-topic-q::before { content: "「"; color: var(--muted); }
+.drift-topic-q::after { content: "」"; color: var(--muted); }
+.drift-topic-tag { display: inline-block; margin-top: 9px; font-size: 11px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; }
+
+.drift-quota { display: flex; align-items: baseline; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.drift-quota b { color: var(--primary); font-size: 16px; font-weight: 700; }
+
+.drift-compose { display: flex; flex-direction: column; gap: 8px; }
+.drift-compose textarea {
+  width: 100%; min-height: 76px; padding: 11px; border: 1px solid var(--line);
+  border-radius: 12px; font-size: 16px; font-family: inherit; resize: none; overflow-y: auto;
+  background: var(--card); outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.drift-compose textarea:focus { border-color: var(--primary); box-shadow: var(--ring); }
+.drift-submit {
+  border: none; border-radius: 12px; background: var(--primary); color: #fff;
+  font-size: 15px; font-weight: 600; padding: 12px; cursor: pointer; font-family: inherit;
+}
+.drift-submit:active { background: var(--primary-dark); }
+.drift-submit:disabled { opacity: .6; }
+
+.drift-fish {
+  width: 100%; border: 1px solid rgba(47, 111, 237, .35); border-radius: 14px;
+  background: rgba(47, 111, 237, .06); color: var(--primary); font-family: inherit;
+  font-size: 16px; font-weight: 700; padding: 16px; cursor: pointer;
+}
+.drift-fish:active { background: rgba(47, 111, 237, .13); }
+.drift-fish:disabled { opacity: .5; cursor: default; }
+
+.drift-bottle { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 15px; animation: bannerIn .28s var(--ease) both; }
+.drift-bottle-txt { font-size: 15.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+.drift-bottle-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.drift-like { border: none; border-radius: 99px; background: #f0f2f7; color: var(--muted);
+  font-family: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; cursor: pointer; }
+.drift-like.on { background: #fdeef4; color: #d4537e; cursor: default; }
+
+.drift-egg { background: linear-gradient(135deg, #eef4ff, #e3edff); border: 1px solid rgba(47, 111, 237, .25);
+  border-radius: 14px; padding: 18px 15px; text-align: center; font-size: 13.5px; line-height: 1.8; color: #1d3f8f; }
+
+.drift-wall-t { font-size: 13px; font-weight: 700; margin: 6px 0 0; }
+.drift-wall-sub { font-size: 11.5px; color: var(--muted); margin: 2px 0 0; }
+.drift-wall-item { display: flex; align-items: flex-start; gap: 10px; background: var(--card);
+  border: 1px solid var(--line); border-radius: 12px; padding: 12px 13px; }
+.drift-wall-rank { flex: none; width: 18px; font-size: 15px; font-weight: 700; color: var(--muted); }
+.drift-wall-txt { flex: 1; min-width: 0; font-size: 14px; line-height: 1.65; word-break: break-word; }
+.drift-wall-like { flex: none; font-size: 12px; font-weight: 600; color: #d4537e; }
+
+[data-theme="dark"] .drift-fish { border-color: rgba(90, 147, 255, .45); background: #182338; }
+[data-theme="dark"] .drift-fish:active { background: #1e2b4a; }
+[data-theme="dark"] .drift-like { background: #262b37; }
+[data-theme="dark"] .drift-like.on { background: #3a2230; color: #f0a3c2; }
+[data-theme="dark"] .drift-egg { background: #1b2438; border-color: #33447a; color: #a8c0f5; }
+
+@media (max-width: 640px) {
+  .drift-head { top: 45px; }
+  .drift-topic-q { font-size: 18px; }
+}
 
 /* ---------- 尊重"减弱动态效果" ---------- */
 @media (prefers-reduced-motion: reduce) {

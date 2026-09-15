@@ -1,5 +1,10 @@
 # Netlify 部署配置
 # 静态托管 + Netlify Functions 反代 Supabase（绕过 GFW 对 *.supabase.co 的 SNI 阻断）
+#
+# ⚠️ 当前处于暂停状态：账户免费额度用尽后整站（含 Functions）被平台暂停，
+#    站点入口已切到 GitHub Pages，备胎反代也已从 app.js 的 PROXY_SOURCES 摘除。
+#    消息提醒投递已迁到 GitHub Actions（.github/workflows/push-sender.yml）。
+#    本文件保留：额度按周期重置后若想恢复 Netlify 线路，配好即可重新启用。
 
 [build]
   publish = "."

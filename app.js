@@ -137,13 +137,16 @@ let viewDay = 0;  // 手机端默认聚焦今天(0=全周)；桌面端全周；�
 
 /* ---------------- 云同步 (Supabase, 经反代) ---------------- */
 /* supabase.co 在国内被 GFW 阻断，全部云端流量走免费反代。
-   双源择优: CF Worker(自有域名 api.courseshell.cloud, 全球边缘) + Netlify(海外)。
-   EdgeOne 备胎已下线（站点被回收，其函数文件已精简移除，需要时从 git 历史恢复）。
-   启动时默认主线路；遇到网络类错误自动轮换备胎并保持，每次调用失败最多切 1 次、每次会话累计最多切 2 次。 */
+   当前唯一线路: CF Worker（自有域名 api.courseshell.cloud，全球边缘）。
+   备胎沿革: EdgeOne 先下线（站点被回收，函数文件已从仓库移除，需要时从 git 历史恢复）；
+   Netlify 备胎于 v50 摘除 —— 其静态站与函数同址，账户免费额度用尽后整站被平台暂停，
+   留着一个必然失败的备胎只会让故障路径多撞一次死站。
+   withFailover 机制保留：将来接入第二个源时，往 PROXY_SOURCES 追加一条即可自动恢复轮换。 */
 const SUPABASE_KEY = "sb_publishable_ONe5Ft1rxeRt-rcdruXYoQ_sM0jgwLn";
 const PROXY_SOURCES = [
-  { id: "cf", base: "https://api.courseshell.cloud", path: "" },
-  { id: "netlify", base: "https://kebiao-ucas.netlify.app", path: "/.netlify/functions/supabase" }
+  { id: "cf", base: "https://api.courseshell.cloud", path: "" }
+  /* 备胎空位：追加 { id, base, path } 即启用；PROXY_SOURCES.length >= 2 时
+     withFailover 恢复"网络类错误自动轮换、每次调用最多切 1 次、每会话累计最多切 2 次" */
 ];
 
 let supabaseClient = null;
@@ -1396,6 +1399,47 @@ async function loadSponsors() {
   } catch (e) {}
 }
 
+/* ---------------- 今日一漂 · 话题库 ----------------
+   数据在 data/topics.json，人工手改提交即可（作者会随时补充）。
+   结构：[{ "date":"2026-09-15", "text":"今天最想逃的一节课是？", "tag":"课业" }]
+   date/text 必填，tag 可选；同一天多条时取第一条（确定性）。
+   ⚠️ 该文件已加入 sw.js 的 CORE，走协商缓存 —— 改完提交即生效，无需升 CACHE。 */
+let TOPICS = [];
+/* 兜底话题：topics.json 缺失、当天没排、或数组为空时使用，保证功能永远可用 */
+const FALLBACK_TOPIC = { text: "今天想对国科大的同学说点什么？", tag: "随便聊聊" };
+
+async function loadTopics() {
+  try {
+    const r = await fetch("./data/topics.json");
+    if (!r.ok) return;
+    const d = await r.json();
+    if (Array.isArray(d)) TOPICS = d.filter(x => x && x.date && x.text);
+  } catch (e) {}
+}
+
+/* 按日期取当天话题；取不到返回 null（调用方走 FALLBACK_TOPIC 兜底） */
+function pickTodayTopic(topics, ds) {
+  if (!Array.isArray(topics)) return null;
+  for (const t of topics) if (t && t.date === ds && t.text) return t;
+  return null;
+}
+
+/* 内容规范化：压缩空白 + 去掉首尾 + 截 100 字；空串返回 null。
+   前端先做一次只为即时反馈，服务端 RPC 会再校验一次（不可信前端）。 */
+function normalizeDriftContent(s) {
+  const t = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  return t.length > 100 ? t.slice(0, 100) : t;
+}
+
+/* 剩余捞瓶额度：3 × 今日投稿数，封顶 5，减去今日已捞，不为负。
+   与 sql/drift_setup.sql 里 drift_quota() 的口径保持一致（服务端才是权威）。 */
+function driftQuota(answered, fished) {
+  const a = Math.max(0, Number(answered) || 0);
+  const f = Math.max(0, Number(fished) || 0);
+  return Math.max(0, Math.min(5, 3 * a) - f);
+}
+
 function buildSponsorBar() {
   if (!SPONSORS.length) return null;
   const s = SPONSORS[Math.floor(Date.now() / 86400000) % SPONSORS.length]; /* 按天轮换 */
@@ -1773,7 +1817,7 @@ function showAlarmModal(code) {
    安卓视浏览器与推送服务而定（国内部分机型收不到，可继续用系统日历提醒）。
    订阅登记在 Supabase；提醒内容在本机算好（复用周次/微调逻辑），
    由 Netlify 定时函数（netlify/functions/push-sender.mjs）按 due_at 定时投递。 */
-const VAPID_PUBLIC = "BHzTjhhJwd1u0OqAm3spdw7Wxlvgr3XDwHUeTFUZ0NCmzj6IfePXZpajw-UkkWGMYtHJQJCOPJSSbhyx-sA-eEQ";
+const VAPID_PUBLIC = "BFb1vJOf40MB6qUkKNPXAqWSgSBKvs1NbBxR8NXW4NKnp_JiC-oMb6uCBFi4jo-wTe8jpFZm5UO5JVQ7bFE2qhs";
 const PUSH_PREFS_KEY = "kebiao:pushprefs";
 const PUSH_JOBS_AT_KEY = "kebiao:pushjobsat";
 const PUSH_JOBS_HASH_KEY = "kebiao:pushjobshash";
@@ -1783,11 +1827,21 @@ let pushSubscription = null;
 let pushRefreshTimer = null;
 let pushBusy = false;
 
+/* 提醒偏好默认值：新增一类时只改这里，pushPrefs 与 buildReminderJobs 共用。
+   drift = 今日一漂召回（21:00），旧设备本地配置缺该键时按默认开启。 */
+function defaultPushPrefs() {
+  return { morning: true, ddl: true, weekly: true, drift: true };
+}
 function pushPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem(PUSH_PREFS_KEY) || "{}");
-    return { morning: p.morning !== false, ddl: p.ddl !== false, weekly: p.weekly !== false };
-  } catch (e) { return { morning: true, ddl: true, weekly: true }; }
+    return {
+      morning: p.morning !== false,
+      ddl: p.ddl !== false,
+      weekly: p.weekly !== false,
+      drift: p.drift !== false
+    };
+  } catch (e) { return defaultPushPrefs(); }
 }
 function savePushPrefs(p) {
   try { localStorage.setItem(PUSH_PREFS_KEY, JSON.stringify(p)); } catch (e) {}
@@ -1815,10 +1869,11 @@ function pushBlockedReason() {
 /* 生成未来 days 天的提醒任务（纯逻辑，可测）：
    - 早间课表：每天 7:30，当天有课才发
    - 晚间 DDL：每天 20:00，次日有未完成作业 / 考试才发
-   - 周日晚预览：周日 19:00，下周有课才发 */
+   - 周日晚预览：周日 19:00，下周有课才发
+   - 今日一漂：每天 21:00，**有课表（= 在用课壳的人）才发**；空课表用户在欢迎页，不该收这条 */
 function buildReminderJobs(courses, records, now, days, prefs) {
   days = days || PUSH_HORIZON_DAYS;
-  prefs = prefs || { morning: true, ddl: true, weekly: true };
+  prefs = prefs || defaultPushPrefs();
   const byCode = {};
   for (const c of (courses || [])) if (c) byCode[c.code] = c;
   const jobs = [];
@@ -1898,6 +1953,11 @@ function buildReminderJobs(courses, records, now, days, prefs) {
         add(dayAt(date, 20, 0), "明天有 " + ddl.length + " 个截止",
           ddl.slice(0, 3).join(" · ") + (ddl.length > 3 ? " 等" : ""), "./", "d-" + ds);
       }
+    }
+    /* 今日一漂：每天 21:00 召回（有课表才发，与上面三类"有内容才发"的口径一致） */
+    if (prefs.drift && (courses || []).length) {
+      add(dayAt(date, 21, 0), "今日一漂 · 还没漂吗？",
+        "今天的话题在等你，答一句就能捞 3 个瓶子 🫧", "./?view=drift", "f-" + ds);
     }
   }
   jobs.sort((a, b) => a.due_at.localeCompare(b.due_at));
@@ -1980,13 +2040,37 @@ async function disablePush() {
   } catch (e) {}
   toast("已关闭消息提醒");
 }
+/* VAPID 密钥指纹：服务端换密钥后，设备上残留的旧订阅绑的是旧公钥，
+   推送服务会因 VAPID 签名不匹配而拒收 —— 表现为"订阅显示已开启但永远收不到"。
+   靠这个指纹识别密钥变更，触发一次静默重订阅，用户无感。
+   首次在新代码上运行（本地没有指纹）也按"已变更"处理 —— 正是刚换过密钥时需要的效果。 */
+const VAPID_FP_KEY = "kebiao:vapidfp";
+function vapidChanged() {
+  const fp = VAPID_PUBLIC.slice(-12);
+  let prev = null;
+  try { prev = localStorage.getItem(VAPID_FP_KEY); } catch (e) {}
+  try { localStorage.setItem(VAPID_FP_KEY, fp); } catch (e) {}
+  return prev !== fp;
+}
+
 async function initPush() {
   if (!pushSupported()) return;
   try {
     const reg = await navigator.serviceWorker.ready;
+    const rotated = vapidChanged(); /* 注意：调用即写入当前指纹，只能调一次 */
     let sub = await reg.pushManager.getSubscription();
+    if (sub && rotated) {
+      /* 密钥换过了：订阅作废，连任务一并重算（否则新订阅可能因为"课表没变、
+         6 小时内不重算"而拿不到任何提醒任务） */
+      try { await sub.unsubscribe(); } catch (e) {}
+      sub = null;
+      try {
+        localStorage.removeItem(PUSH_JOBS_AT_KEY);
+        localStorage.removeItem(PUSH_JOBS_HASH_KEY);
+      } catch (e) {}
+    }
     if (!sub && Notification.permission === "granted") {
-      /* 权限还在但订阅丢了（清缓存/轮换）：静默补订 */
+      /* 权限还在但订阅丢了（清缓存 / 密钥轮换）：静默补订 */
       sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC) });
     }
     if (!sub) return;
@@ -2002,7 +2086,7 @@ function showPushModal() {
   const prefs = pushPrefs();
   const card = el("div", "modal-card");
   card.appendChild(el("h3", "", "🔔 消息提醒（手机推送）"));
-  card.appendChild(el("p", "share-hint", "到点由课壳直接推送：每天早上今日课程、晚上明日 DDL、周日晚下周预览。与课程抽屉里的「系统日历提醒」相互独立，可同时使用。"));
+  card.appendChild(el("p", "share-hint", "到点由课壳直接推送：每天早上今日课程、晚上明日 DDL、周日晚下周预览、晚上 21:00 今日一漂。与课程抽屉里的「系统日历提醒」相互独立，可同时使用。"));
   if (blocked) card.appendChild(el("p", "push-warn", "⚠️ " + blocked));
   const mkPref = (key, label) => {
     const row = el("label", "push-pref");
@@ -2020,6 +2104,7 @@ function showPushModal() {
   card.appendChild(mkPref("morning", "每天早上 7:30 · 今日课程"));
   card.appendChild(mkPref("ddl", "每天晚上 20:00 · 明日作业 / 考试"));
   card.appendChild(mkPref("weekly", "周日晚上 19:00 · 下周课表预览"));
+  card.appendChild(mkPref("drift", "每天晚上 21:00 · 今日一漂召回"));
   if (supported && !blocked) {
     const btn = el("button", "r-btn", on ? "关闭消息提醒" : "开启消息提醒");
     btn.addEventListener("click", async () => {
@@ -2772,6 +2857,8 @@ function showMoreMenu() {
     <div class="modal-card">
       <h3>更多</h3>
       <div class="menu-list">
+        <button class="menu-item" id="mmDrift"><span class="mi-ico">🫧</span><span>今日一漂</span></button>
+        <button class="menu-item" id="mmForum"><span class="mi-ico">💬</span><span>自由论坛</span></button>
         <button class="menu-item" id="mmSearch"><span class="mi-ico">🔍</span><span>添加课程（搜索）</span></button>
         <button class="menu-item" id="mmSync"><span class="mi-ico">☁</span><span>立即云备份</span></button>
         <button class="menu-item" id="mmInstall"><span class="mi-ico">📲</span><span>安装成手机 App</span></button>
@@ -2800,6 +2887,17 @@ function showMoreMenu() {
   $("mmCodes").addEventListener("click", () => { hideModal(); showCodesModal(); });
   $("mmBackup").addEventListener("click", () => { hideModal(); backupModal(); });
   $("mmWidget").addEventListener("click", () => { hideModal(); showWidgetGuide(); });
+  $("mmDrift").addEventListener("click", () => { hideModal(); showDrift(); });
+  $("mmForum").addEventListener("click", () => { hideModal(); showForum("list"); }); /* showForum 内部仍要求登录 */
+  /* 未读回复数：菜单项行尾显示一个数字角标（红点本体常驻顶栏「更多」按钮，见 renderReplyBadge） */
+  if (replyBadge > 0) {
+    const item = $("mmForum");
+    if (item) {
+      const n = el("span", "badge blue", replyBadge > 9 ? "9+" : String(replyBadge));
+      n.style.marginLeft = "auto";
+      item.appendChild(n);
+    }
+  }
 }
 
 /* 桌面小组件/快捷方式指南：真小组件是原生 App 专属；安卓给长按菜单，iOS 给「快捷指令」替代路径 */
@@ -3507,6 +3605,222 @@ async function downloadForumFile(p) {
   }
 }
 
+/* ---------------- 今日一漂（话题墙 × 漂流瓶） ----------------
+   每天一个话题，匿名作答：用随机设备号作身份，**不需要登录**。
+   核心机制「答了才能捞」—— 把漂流瓶的双边市场压成单边，人少也转得起来。
+   三张表对前端全锁，读写一律走 SECURITY DEFINER RPC；额度与去重的权威在服务端，
+   这里算的 driftQuota 只用于展示。
+   详见 sql/drift_setup.sql、data/topics.json。 */
+let driftCtx = { topic: null, status: null, bottle: null, liked: false, eggCount: 0, eggText: "" };
+
+/* 匿名身份：复用日活统计那套随机设备号（同一台设备在漂流瓶里是同一个"人"） */
+function driftDid() {
+  let did = null;
+  try { did = localStorage.getItem(DID_KEY); } catch (e) {}
+  if (!did) {
+    did = uid();
+    try { localStorage.setItem(DID_KEY, did); } catch (e) {}
+  }
+  return did;
+}
+function driftDateOffset(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return dateStrOf(d);
+}
+/* 当天话题；topics.json 缺失 / 当天没排时走兜底，保证功能永远可用 */
+function driftTopic() {
+  const ds = todayStr();
+  const t = pickTodayTopic(TOPICS, ds);
+  return t ? { date: ds, text: t.text, tag: t.tag || "" }
+           : { date: ds, text: FALLBACK_TOPIC.text, tag: FALLBACK_TOPIC.tag };
+}
+/* 池子捞空时的彩蛋文案（轮换，避免每次都一样） */
+const DRIFT_EMPTY = [
+  "海面很安静，今天还没人投瓶。去拉个同学一起来 🫧",
+  "这一片海域暂时空了，催催朋友多投几个 📮",
+  "瓶子都沉底了，明天早些来看看 🐟",
+  "你比所有人都先到，先去投一个吧 🌊"
+];
+function driftEmptyText(i) { return DRIFT_EMPTY[Math.abs(Number(i) || 0) % DRIFT_EMPTY.length]; }
+
+/* ---- 与 Supabase 的 4 个调用（全部经 withFailover 线路轮换） ---- */
+async function driftApiStatus() {
+  const r = await withFailover((c) => c.rpc("drift_status", { p_did: driftDid(), p_topic_date: todayStr() }));
+  if (r && r.error) throw new Error(r.error.message || "读取失败");
+  const d = r && r.data;
+  return (d && typeof d === "object") ? d : { answered: 0, fished: 0, quota: 0, wall: [] };
+}
+async function driftApiSubmit(body) {
+  const r = await withFailover((c) => c.rpc("drift_submit", {
+    p_did: driftDid(), p_topic_date: todayStr(), p_content: body
+  }));
+  if (r && r.error) throw new Error(r.error.message || "投瓶失败");
+}
+async function driftApiFish() {
+  const r = await withFailover((c) => c.rpc("drift_fish", { p_did: driftDid(), p_topic_date: todayStr() }));
+  if (r && r.error) throw new Error(r.error.message || "捞瓶失败");
+  const row = Array.isArray(r.data) ? r.data[0] : r.data;
+  return row || { egg: true };
+}
+async function driftApiLike(id) {
+  const r = await withFailover((c) => c.rpc("drift_like", { p_did: driftDid(), p_bottle_id: id }));
+  if (r && r.error) throw new Error(r.error.message || "共鸣失败");
+  return typeof r.data === "number" ? r.data : 0;
+}
+
+function showDrift() {
+  driftCtx.topic = driftTopic();
+  driftCtx.status = null;
+  driftCtx.bottle = null;
+  driftCtx.liked = false;
+  driftCtx.eggCount = 0;
+  $("welcome").classList.add("hidden");
+  $("main").classList.add("hidden");
+  $("schoolPick").classList.add("hidden");
+  $("forum").classList.add("hidden");
+  $("drift").classList.remove("hidden");
+  window.scrollTo(0, 0);
+  renderDrift();
+  driftApiStatus()
+    .then((st) => { driftCtx.status = st; renderDrift(); })
+    .catch(() => { driftCtx.status = { answered: 0, fished: 0, quota: 0, wall: [] }; renderDrift(); });
+}
+function closeDrift() {
+  $("drift").classList.add("hidden");
+  $("driftBody").innerHTML = "";
+  $("driftHead").innerHTML = "";
+  state.codes.length ? showMain() : showWelcome();
+}
+
+function renderDrift() {
+  const head = $("driftHead");
+  head.innerHTML = "";
+  const back = el("button", "fb-back", "←");
+  back.addEventListener("click", closeDrift);
+  head.appendChild(back);
+  head.appendChild(el("div", "fb-title", "今日一漂"));
+
+  const body = $("driftBody");
+  body.innerHTML = "";
+  const tp = driftCtx.topic || driftTopic();
+  const st = driftCtx.status;
+
+  const topic = el("div", "drift-topic");
+  topic.appendChild(el("div", "drift-topic-day", tp.date + " · 今天的话题"));
+  topic.appendChild(el("div", "drift-topic-q", tp.text));
+  if (tp.tag) topic.appendChild(el("div", "drift-topic-tag", tp.tag));
+  body.appendChild(topic);
+
+  if (!st) { body.appendChild(el("div", "f-loading", "正在读取…")); return; }
+
+  const q = el("div", "drift-quota");
+  q.appendChild(el("span", "", "今日还可捞"));
+  q.appendChild(el("b", "", String(st.quota)));
+  q.appendChild(el("span", "", "个瓶子（已捞 " + (st.fished || 0) + "）"));
+  body.appendChild(q);
+
+  /* 作答区：每设备每天只能投 1 瓶 */
+  if (st.answered > 0) {
+    body.appendChild(el("div", "f-tip", "你已经投过一个瓶子了，明天再来投 👌"));
+  } else {
+    const wrap = el("div", "drift-compose");
+    const ta = el("textarea");
+    ta.placeholder = "匿名写点什么…（≤100 字，没人知道是你）";
+    ta.spellcheck = false;
+    wrap.appendChild(ta);
+    bindAutoGrow(ta, 140);
+    attachCount(ta, 100);
+    const btn = el("button", "drift-submit", "投出这个瓶子");
+    wrap.appendChild(btn);
+    let busy = false;
+    const send = async () => {
+      if (busy) return;
+      const body2 = normalizeDriftContent(ta.value);
+      if (!body2) { toast("先写点什么吧"); return; }
+      busy = true; btn.disabled = true; btn.textContent = "投出中…";
+      try {
+        await driftApiSubmit(body2);
+        toast("瓶子已经漂出去了 🫧");
+        driftCtx.status = await driftApiStatus();
+        renderDrift();
+      } catch (e) {
+        toast((e && e.message) || "投瓶失败");
+        busy = false; btn.disabled = false; btn.textContent = "投出这个瓶子";
+      }
+    };
+    btn.addEventListener("click", send);
+    ctrlEnter(ta, send);
+    body.appendChild(wrap);
+  }
+
+  /* 刚捞到的瓶子 / 彩蛋 */
+  const b = driftCtx.bottle;
+  if (b) {
+    if (b.egg) {
+      const msg = st.quota <= 0
+        ? "今天能捞的都捞完了，明天再来 🌙"
+        : driftEmptyText(driftCtx.eggCount - 1);
+      body.appendChild(el("div", "drift-egg", msg));
+    } else {
+      const card = el("div", "drift-bottle");
+      card.appendChild(el("div", "drift-bottle-txt", b.content));
+      const row = el("div", "drift-bottle-row");
+      const like = el("button", "drift-like" + (driftCtx.liked ? " on" : ""), "♥ 共鸣 " + (b.likes || 0));
+      like.disabled = !!driftCtx.liked;
+      like.addEventListener("click", async () => {
+        like.disabled = true;
+        try {
+          const n = await driftApiLike(b.bottle_id);
+          b.likes = n;
+          driftCtx.liked = true;
+          like.textContent = "♥ 共鸣 " + n;
+          like.classList.add("on");
+        } catch (e) {
+          like.disabled = false;
+          toast((e && e.message) || "共鸣失败");
+        }
+      });
+      row.appendChild(like);
+      card.appendChild(row);
+      body.appendChild(card);
+    }
+  }
+
+  const fishBtn = el("button", "drift-fish", st.quota > 0 ? "🎣 捞一个瓶子" : "今天的额度用完了");
+  fishBtn.disabled = st.quota <= 0;
+  fishBtn.addEventListener("click", async () => {
+    fishBtn.disabled = true; fishBtn.textContent = "正在捞…";
+    try {
+      const row = await driftApiFish();
+      driftCtx.bottle = row;
+      driftCtx.liked = false;
+      if (row && row.egg) driftCtx.eggCount++;
+      driftCtx.status = await driftApiStatus();
+      renderDrift();
+    } catch (e) {
+      toast((e && e.message) || "捞瓶失败");
+      fishBtn.disabled = false; fishBtn.textContent = "🎣 捞一个瓶子";
+    }
+  });
+  body.appendChild(fishBtn);
+
+  /* 昨日最共鸣 Top3（不展示长尾） */
+  const wall = Array.isArray(st.wall) ? st.wall : [];
+  if (wall.length) {
+    const yt = pickTodayTopic(TOPICS, driftDateOffset(-1));
+    body.appendChild(el("div", "drift-wall-t", "昨天的共鸣榜"));
+    body.appendChild(el("div", "drift-wall-sub", "「" + ((yt && yt.text) || "昨天的话题") + "」"));
+    wall.forEach((w, i) => {
+      const it = el("div", "drift-wall-item");
+      it.appendChild(el("div", "drift-wall-rank", String(i + 1)));
+      it.appendChild(el("div", "drift-wall-txt", w.content || ""));
+      it.appendChild(el("div", "drift-wall-like", "♥ " + (w.likes || 0)));
+      body.appendChild(it);
+    });
+  }
+}
+
 /* ---------------- 初始化 ---------------- */
 function init() {
   loadState();
@@ -3525,10 +3839,7 @@ function init() {
   ctrlEnter($("codeInput"), generate);
   $("btnShare").addEventListener("click", shareLink);
   $("btnLogin").addEventListener("click", showAuthModal);
-  $("btnForum").addEventListener("click", () => {
-    if (!authUser) { promptLogin("登录后才能浏览论坛"); return; }
-    showForum("list");
-  });
+  $("btnDrift").addEventListener("click", showDrift); /* 匿名功能，不设登录门槛；论坛入口已挪进「更多」菜单 */
   $("btnMore").addEventListener("click", showMoreMenu);
   $("btnTheme").addEventListener("click", cycleTheme);
   applyTheme(themePref());
@@ -3632,6 +3943,8 @@ function init() {
       }, 400); /* 等首屏渲染完成 */
     }
   }
+  /* 今日一漂召回推送的落地（?view=drift）——匿名功能，登录与否都能进 */
+  if (jump === "drift") setTimeout(() => { try { showDrift(); } catch (e) {} }, 400);
 
   render();
 }
@@ -3685,6 +3998,7 @@ function applySchoolConfig(cfg) {
 /* 数据就绪后的公共启动尾巴（init/统计/云同步/SW 注册） */
 async function startApp() {
   try { await loadSponsors(); } catch (e) {} /* 广告数据就位后再首屏渲染 */
+  try { await loadTopics(); } catch (e) {}   /* 今日一漂话题库就位后再首屏渲染 */
   init();
   statsPing();
   if (authUser) pullAndMerge();
@@ -3768,7 +4082,10 @@ function renderIdentity() {
 
 function renderReplyBadge() {
   if (typeof document === "undefined") return;
-  const b = $("btnForum");
+  /* 宿主固定为顶栏「更多」按钮：论坛入口已从顶栏挪进「更多」菜单，红点跟着走。
+     不用 $("mmForum") 当宿主 —— 弹窗关闭后它仍在 DOM 里（只是父节点被 .hidden），
+     红点会留在看不见的地方。菜单打开时行尾的数字角标由 showMoreMenu 负责。 */
+  const b = $("btnMore");
   if (!b) return;
   let dot = b.querySelector(".n-dot");
   if (replyBadge > 0) {
@@ -3879,6 +4196,8 @@ if (typeof module !== "undefined" && module.exports) {
     findNextClass, todayRemainingClasses,
     dateStrOf, todayStr, esc, wmoIcon, wmoShort,
     buildReminderJobs,
+    PROXY_SOURCES, SUPABASE_KEY,
+    pickTodayTopic, driftQuota, normalizeDriftContent, defaultPushPrefs,
     __setRecords: (o) => { state.records = o || {}; } /* 仅供测试注入微调数据 */
   };
 }

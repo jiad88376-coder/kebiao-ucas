@@ -3,7 +3,9 @@
 -- 1) push_subscriptions 设备订阅（endpoint 即秘密，只有浏览器的推送服务知道）
 -- 2) push_jobs          到点待发的提醒任务（由前端按本地课表算好写入）
 -- 3) RPC                前端只经 RPC 读写，两张表对 anon/authenticated 全锁
--- 发送端：GitHub Actions（scripts/push_sender.mjs）用 service_role key 读取并投递
+-- 发送端：Netlify 定时函数 netlify/functions/push-sender.mjs（cron，每 10 分钟扫一次）
+--         用 SUPABASE_SERVICE_KEY（service_role）读到期任务 → web-push 投递 → 404/410 清理失效订阅
+--         环境变量在 Netlify → Site configuration → Environment variables 配置
 -- ============================================================
 
 create table if not exists public.push_subscriptions (

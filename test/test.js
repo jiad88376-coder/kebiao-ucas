@@ -229,7 +229,50 @@ app.__setRecords({});
 const offJobs = app.buildReminderJobs(pCourses, pRecords, pushNow, 30, { morning: false, ddl: true, weekly: false });
 ok(!offJobs.some(j => j.tag.startsWith("m-")) && !offJobs.some(j => j.tag.startsWith("w-")), "偏好关闭后不再生成对应任务");
 ok(offJobs.some(j => j.tag.startsWith("d-")), "偏好保留的 DDL 任务仍在");
-ok(app.buildReminderJobs([], {}, pushNow, 30).length === 0, "空课表不生成任务");
+ok(app.buildReminderJobs([], {}, pushNow, 30).length === 0, "空课表不生成任务（含今日一漂召回）");
+
+console.log("== 今日一漂：提醒任务 ==");
+const dpf = app.defaultPushPrefs();
+ok(dpf.drift === true, "defaultPushPrefs 含 drift:true（新增一类默认开启）");
+const jDrift = app.buildReminderJobs(pCourses, pRecords, pushNow, 30).filter(j => j.tag.startsWith("f-"));
+ok(jDrift.length > 0, "有课表时生成今日一漂召回任务");
+ok(!!jDrift[0] && new Date(jDrift[0].due_at).getHours() === 21 && new Date(jDrift[0].due_at).getMinutes() === 0,
+  "今日一漂召回定在本地 21:00");
+ok(!!jDrift[0] && jDrift[0].url === "./?view=drift", "今日一漂召回深链指向 ?view=drift");
+const jNoDrift = app.buildReminderJobs(pCourses, pRecords, pushNow, 30,
+  { morning: true, ddl: true, weekly: true, drift: false });
+ok(!jNoDrift.some(j => j.tag.startsWith("f-")), "关闭 drift 偏好后不再生成 f- 任务");
+
+console.log("== 今日一漂：话题挑选 ==");
+const tpList = [
+  { date: "2026-09-15", text: "话题A" },
+  { date: "2026-09-16", text: "话题B" },
+  { date: "2026-09-16", text: "话题B2" },
+  { date: "2026-09-17", text: "" }
+];
+ok(app.pickTodayTopic(tpList, "2026-09-15").text === "话题A", "命中当天话题");
+ok(app.pickTodayTopic(tpList, "2026-09-16").text === "话题B", "同一天多条时取第一条");
+ok(app.pickTodayTopic(tpList, "2026-09-17") === null, "当天条目 text 为空视为没有");
+ok(app.pickTodayTopic(tpList, "2026-09-14") === null, "日期不匹配返回 null");
+ok(app.pickTodayTopic([], "2026-09-15") === null, "空话题库返回 null");
+ok(app.pickTodayTopic(null, "2026-09-15") === null, "话题库为 null 返回 null");
+
+console.log("== 今日一漂：额度与内容 ==");
+ok(app.driftQuota(0, 0) === 0, "没答题没额度");
+ok(app.driftQuota(1, 0) === 3, "答一题得 3 次");
+ok(app.driftQuota(1, 3) === 0, "用完为 0");
+ok(app.driftQuota(1, 5) === 0, "超额不为负");
+ok(app.driftQuota(2, 0) === 5, "多投封顶 5 次");
+ok(app.driftQuota(0, 3) === 0, "没答题即使有捞取记录也为 0");
+ok(app.normalizeDriftContent("  a   b  ") === "a b", "内容压缩空白并去首尾");
+ok(app.normalizeDriftContent("   ") === null, "内容全空白返回 null");
+ok(app.normalizeDriftContent("x".repeat(120)).length === 100, "内容超长截断到 100 字");
+
+console.log("== 反代线路（v50 起摘除 Netlify 备胎）==");
+ok(app.PROXY_SOURCES.length === 1 && app.PROXY_SOURCES[0].id === "cf", "只保留 CF 单源（备胎空位机制保留）");
+ok(app.PROXY_SOURCES.every(s => !/netlify/i.test(s.base + s.path)), "线路表中无已暂停的 Netlify 死链");
+ok(app.PROXY_SOURCES.every(s => /^https:\/\//.test(s.base)), "线路均走 HTTPS");
+ok(/^sb_publishable_/.test(app.SUPABASE_KEY), "前端只持 publishable key（service_role 不得进前端）");
 
 console.log(`\n通过 ${passed} 项测试`);
 if (process.exitCode) { console.error("存在失败项"); process.exit(1); }
