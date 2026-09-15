@@ -1,0 +1,42 @@
+# 消息提醒投递 · 定时任务
+#
+# 说明：原先跑在 Netlify 定时函数上，Netlify 账户免费额度用尽后整站（含 Functions）
+# 被平台暂停，导致所有推送静默失效。迁到 Actions 后不再依赖有额度上限的托管平台。
+#
+# ⚠️ 本文件必须由仓库所有者用 git 手工提交：GitHub 的 Contents API 拒绝通过 API
+#    创建/修改 .github/workflows/*（需要 token 具备 workflow 权限），而 admin.html
+#    用的经典 Token 只有 repo 权限。其余文件可以走后台发布，这个文件不行。
+#
+# 需要的 Secrets（Settings → Secrets and variables → Actions）：
+#   SUPABASE_URL（可省，脚本内有默认值）
+#   SUPABASE_SERVICE_KEY / VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT
+#
+# 手动测试：Actions → push-sender → Run workflow
+
+name: push-sender
+
+on:
+  schedule:
+    # UTC。23 点 = 北京次日 7:00（早间课表）；11/12/13 点 = 北京 19/20/21 点
+    # （19 周日晚预览、20 晚间 DDL、21 今日一漂召回）。每 10 分钟一次，覆盖各窗口。
+    - cron: "*/10 11,12,13,23 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # 项目唯一依赖，仅此脚本需要，不进仓库 node_modules
+      - run: npm install --no-save web-push
+      - name: 投递到期提醒
+        run: node .github/scripts/push-sender.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
