@@ -731,6 +731,7 @@ function curWeek() { return getSemesterWeek(new Date()); }
 function render() {
   const hasCourses = state.codes.length > 0;
   hasCourses ? showMain() : showWelcome();
+  renderTopicBar();
   renderWeekbar();
   renderDayTabs();
   renderGrid();
@@ -1399,7 +1400,7 @@ async function loadSponsors() {
   } catch (e) {}
 }
 
-/* ---------------- 今日一漂 · 话题库 ----------------
+/* ---------------- 漂流瓶 · 话题库 ----------------
    数据在 data/topics.json，人工手改提交即可（作者会随时补充）。
    结构：[{ "date":"2026-09-15", "text":"今天最想逃的一节课是？", "tag":"课业" }]
    date/text 必填，tag 可选；同一天多条时取第一条（确定性）。
@@ -1828,7 +1829,7 @@ let pushRefreshTimer = null;
 let pushBusy = false;
 
 /* 提醒偏好默认值：新增一类时只改这里，pushPrefs 与 buildReminderJobs 共用。
-   drift = 今日一漂召回（21:00），旧设备本地配置缺该键时按默认开启。 */
+   drift = 漂流瓶召回（21:00），旧设备本地配置缺该键时按默认开启。 */
 function defaultPushPrefs() {
   return { morning: true, ddl: true, weekly: true, drift: true };
 }
@@ -1870,7 +1871,7 @@ function pushBlockedReason() {
    - 早间课表：每天 7:30，当天有课才发
    - 晚间 DDL：每天 20:00，次日有未完成作业 / 考试才发
    - 周日晚预览：周日 19:00，下周有课才发
-   - 今日一漂：每天 21:00，**有课表（= 在用课壳的人）才发**；空课表用户在欢迎页，不该收这条 */
+   - 漂流瓶：每天 21:00，**有课表（= 在用课壳的人）才发**；空课表用户在欢迎页，不该收这条 */
 function buildReminderJobs(courses, records, now, days, prefs) {
   days = days || PUSH_HORIZON_DAYS;
   prefs = prefs || defaultPushPrefs();
@@ -1954,9 +1955,9 @@ function buildReminderJobs(courses, records, now, days, prefs) {
           ddl.slice(0, 3).join(" · ") + (ddl.length > 3 ? " 等" : ""), "./", "d-" + ds);
       }
     }
-    /* 今日一漂：每天 21:00 召回（有课表才发，与上面三类"有内容才发"的口径一致） */
+    /* 漂流瓶：每天 21:00 召回（有课表才发，与上面三类"有内容才发"的口径一致） */
     if (prefs.drift && (courses || []).length) {
-      add(dayAt(date, 21, 0), "今日一漂 · 还没漂吗？",
+      add(dayAt(date, 21, 0), "漂流瓶 · 还没漂吗？",
         "今天的话题在等你，答一句就能捞 3 个瓶子 🫧", "./?view=drift", "f-" + ds);
     }
   }
@@ -2086,7 +2087,7 @@ function showPushModal() {
   const prefs = pushPrefs();
   const card = el("div", "modal-card");
   card.appendChild(el("h3", "", "🔔 消息提醒（手机推送）"));
-  card.appendChild(el("p", "share-hint", "到点由课壳直接推送：每天早上今日课程、晚上明日 DDL、周日晚下周预览、晚上 21:00 今日一漂。与课程抽屉里的「系统日历提醒」相互独立，可同时使用。"));
+  card.appendChild(el("p", "share-hint", "到点由课壳直接推送：每天早上今日课程、晚上明日 DDL、周日晚下周预览、晚上 21:00 漂流瓶。与课程抽屉里的「系统日历提醒」相互独立，可同时使用。"));
   if (blocked) card.appendChild(el("p", "push-warn", "⚠️ " + blocked));
   const mkPref = (key, label) => {
     const row = el("label", "push-pref");
@@ -2104,7 +2105,7 @@ function showPushModal() {
   card.appendChild(mkPref("morning", "每天早上 7:30 · 今日课程"));
   card.appendChild(mkPref("ddl", "每天晚上 20:00 · 明日作业 / 考试"));
   card.appendChild(mkPref("weekly", "周日晚上 19:00 · 下周课表预览"));
-  card.appendChild(mkPref("drift", "每天晚上 21:00 · 今日一漂召回"));
+  card.appendChild(mkPref("drift", "每天晚上 21:00 · 漂流瓶召回"));
   if (supported && !blocked) {
     const btn = el("button", "r-btn", on ? "关闭消息提醒" : "开启消息提醒");
     btn.addEventListener("click", async () => {
@@ -2857,7 +2858,7 @@ function showMoreMenu() {
     <div class="modal-card">
       <h3>更多</h3>
       <div class="menu-list">
-        <button class="menu-item" id="mmDrift"><span class="mi-ico">🫧</span><span>今日一漂</span></button>
+        <button class="menu-item" id="mmDrift"><span class="mi-ico">🫧</span><span>漂流瓶</span></button>
         <button class="menu-item" id="mmForum"><span class="mi-ico">💬</span><span>自由论坛</span></button>
         <button class="menu-item" id="mmSearch"><span class="mi-ico">🔍</span><span>添加课程（搜索）</span></button>
         <button class="menu-item" id="mmSync"><span class="mi-ico">☁</span><span>立即云备份</span></button>
@@ -3605,7 +3606,7 @@ async function downloadForumFile(p) {
   }
 }
 
-/* ---------------- 今日一漂（话题墙 × 漂流瓶） ----------------
+/* ---------------- 漂流瓶（匿名话题作答 + 随机捞瓶） ----------------
    每天一个话题，匿名作答：用随机设备号作身份，**不需要登录**。
    核心机制「答了才能捞」—— 把漂流瓶的双边市场压成单边，人少也转得起来。
    三张表对前端全锁，读写一律走 SECURITY DEFINER RPC；额度与去重的权威在服务端，
@@ -3634,6 +3635,13 @@ function driftTopic() {
   const t = pickTodayTopic(TOPICS, ds);
   return t ? { date: ds, text: t.text, tag: t.tag || "" }
            : { date: ds, text: FALLBACK_TOPIC.text, tag: FALLBACK_TOPIC.tag };
+}
+
+/* 课表页顶部的「今日主题」栏：把今日话题前置到首屏，点它进漂流瓶。
+   话题只在启动时加载一次，这里只负责把文案贴上去（render() 每次调用都很廉价）。 */
+function renderTopicBar() {
+  const txt = $("topicBarText");
+  if (txt) txt.textContent = driftTopic().text;
 }
 /* 池子捞空时的彩蛋文案（轮换，避免每次都一样） */
 const DRIFT_EMPTY = [
@@ -3699,7 +3707,7 @@ function renderDrift() {
   const back = el("button", "fb-back", "←");
   back.addEventListener("click", closeDrift);
   head.appendChild(back);
-  head.appendChild(el("div", "fb-title", "今日一漂"));
+  head.appendChild(el("div", "fb-title", "漂流瓶"));
 
   const body = $("driftBody");
   body.innerHTML = "";
@@ -3840,6 +3848,7 @@ function init() {
   $("btnShare").addEventListener("click", shareLink);
   $("btnLogin").addEventListener("click", showAuthModal);
   $("btnDrift").addEventListener("click", showDrift); /* 匿名功能，不设登录门槛；论坛入口已挪进「更多」菜单 */
+  $("topicBar").addEventListener("click", showDrift); /* 课表页的「今日主题」栏，点它进漂流瓶 */
   $("btnMore").addEventListener("click", showMoreMenu);
   $("btnTheme").addEventListener("click", cycleTheme);
   applyTheme(themePref());
@@ -3943,7 +3952,7 @@ function init() {
       }, 400); /* 等首屏渲染完成 */
     }
   }
-  /* 今日一漂召回推送的落地（?view=drift）——匿名功能，登录与否都能进 */
+  /* 漂流瓶召回推送的落地（?view=drift）——匿名功能，登录与否都能进 */
   if (jump === "drift") setTimeout(() => { try { showDrift(); } catch (e) {} }, 400);
 
   render();
@@ -3998,7 +4007,7 @@ function applySchoolConfig(cfg) {
 /* 数据就绪后的公共启动尾巴（init/统计/云同步/SW 注册） */
 async function startApp() {
   try { await loadSponsors(); } catch (e) {} /* 广告数据就位后再首屏渲染 */
-  try { await loadTopics(); } catch (e) {}   /* 今日一漂话题库就位后再首屏渲染 */
+  try { await loadTopics(); } catch (e) {}   /* 漂流瓶话题库就位后再首屏渲染 */
   init();
   statsPing();
   if (authUser) pullAndMerge();

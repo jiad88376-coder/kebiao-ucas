@@ -157,6 +157,23 @@ button:focus-visible { outline: 2px solid rgba(47, 111, 237, .55); outline-offse
 .banner ul { margin: 6px 0 0; padding-left: 18px; }
 .banner li { margin: 2px 0; }
 
+/* ---------- 今日主题栏（课表页顶部，点它进漂流瓶） ---------- */
+.topic-bar {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 10px 12px; border-radius: 12px; cursor: pointer; text-align: left;
+  background: linear-gradient(135deg, #eef4ff, #e6f1fb);
+  border: 1px solid rgba(47, 111, 237, .28);
+  color: var(--text); font-family: inherit; font-size: 14px;
+  animation: bannerIn .28s var(--ease) both;
+}
+.topic-bar:active { filter: brightness(.97); }
+.tb-tag { flex: none; font-size: 11px; font-weight: 600; line-height: 1.7;
+  color: #fff; background: var(--primary); border-radius: 6px; padding: 1px 7px; }
+.tb-text { flex: 1; min-width: 0; font-size: 14px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-go { flex: none; color: var(--primary); font-size: 16px; font-weight: 700; }
+[data-theme="dark"] .topic-bar { background: #182338; border-color: #33508f; }
+
 /* ---------- 周次切换条 ---------- */
 .weekbar { display: flex; align-items: center; gap: 6px; margin: 10px 0; }
 .wk-btn {
@@ -890,7 +907,7 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 [data-theme="dark"] .sponsor-bar { background: rgba(216, 146, 22, .1); border-color: rgba(216, 146, 22, .3); }
 [data-theme="dark"] .spn-others-row { background: #262b37; border-color: #3a4358; }
 
-/* ---------- 今日一漂（话题墙 × 漂流瓶） ---------- */
+/* ---------- 漂流瓶（匿名话题） ---------- */
 #drift { max-width: 760px; margin: 0 auto; padding: 10px 8px 40px; }
 .drift-head {
   display: flex; align-items: center; gap: 8px; margin-bottom: 10px;

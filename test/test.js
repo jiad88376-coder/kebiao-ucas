@@ -229,21 +229,21 @@ app.__setRecords({});
 const offJobs = app.buildReminderJobs(pCourses, pRecords, pushNow, 30, { morning: false, ddl: true, weekly: false });
 ok(!offJobs.some(j => j.tag.startsWith("m-")) && !offJobs.some(j => j.tag.startsWith("w-")), "偏好关闭后不再生成对应任务");
 ok(offJobs.some(j => j.tag.startsWith("d-")), "偏好保留的 DDL 任务仍在");
-ok(app.buildReminderJobs([], {}, pushNow, 30).length === 0, "空课表不生成任务（含今日一漂召回）");
+ok(app.buildReminderJobs([], {}, pushNow, 30).length === 0, "空课表不生成任务（含漂流瓶召回）");
 
-console.log("== 今日一漂：提醒任务 ==");
+console.log("== 漂流瓶：提醒任务 ==");
 const dpf = app.defaultPushPrefs();
 ok(dpf.drift === true, "defaultPushPrefs 含 drift:true（新增一类默认开启）");
 const jDrift = app.buildReminderJobs(pCourses, pRecords, pushNow, 30).filter(j => j.tag.startsWith("f-"));
-ok(jDrift.length > 0, "有课表时生成今日一漂召回任务");
+ok(jDrift.length > 0, "有课表时生成漂流瓶召回任务");
 ok(!!jDrift[0] && new Date(jDrift[0].due_at).getHours() === 21 && new Date(jDrift[0].due_at).getMinutes() === 0,
-  "今日一漂召回定在本地 21:00");
-ok(!!jDrift[0] && jDrift[0].url === "./?view=drift", "今日一漂召回深链指向 ?view=drift");
+  "漂流瓶召回定在本地 21:00");
+ok(!!jDrift[0] && jDrift[0].url === "./?view=drift", "漂流瓶召回深链指向 ?view=drift");
 const jNoDrift = app.buildReminderJobs(pCourses, pRecords, pushNow, 30,
   { morning: true, ddl: true, weekly: true, drift: false });
 ok(!jNoDrift.some(j => j.tag.startsWith("f-")), "关闭 drift 偏好后不再生成 f- 任务");
 
-console.log("== 今日一漂：话题挑选 ==");
+console.log("== 漂流瓶：话题挑选 ==");
 const tpList = [
   { date: "2026-09-15", text: "话题A" },
   { date: "2026-09-16", text: "话题B" },
@@ -257,7 +257,7 @@ ok(app.pickTodayTopic(tpList, "2026-09-14") === null, "日期不匹配返回 nul
 ok(app.pickTodayTopic([], "2026-09-15") === null, "空话题库返回 null");
 ok(app.pickTodayTopic(null, "2026-09-15") === null, "话题库为 null 返回 null");
 
-console.log("== 今日一漂：额度与内容 ==");
+console.log("== 漂流瓶：额度与内容 ==");
 ok(app.driftQuota(0, 0) === 0, "没答题没额度");
 ok(app.driftQuota(1, 0) === 3, "答一题得 3 次");
 ok(app.driftQuota(1, 3) === 0, "用完为 0");

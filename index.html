@@ -38,7 +38,7 @@ try {
     </span>
   </div>
   <div class="top-actions">
-    <button id="btnDrift" class="icon-btn talk-btn" title="今日一漂"><span class="ib-ico">🫧</span><span class="ib-label">今日一漂</span></button>
+    <button id="btnDrift" class="icon-btn talk-btn" title="漂流瓶"><span class="ib-ico">🫧</span><span class="ib-label">漂流瓶</span></button>
     <button id="btnLogin" class="icon-btn" title="登录云同步"><span class="ib-ico">☁</span><span class="ib-label">登录</span></button>
     <button id="btnMore" class="icon-btn" title="更多"><span class="ib-ico more-ico">⋯</span><span class="ib-label">更多</span></button>
     <button id="btnShare" class="icon-btn" title="推荐给同学"><span class="ib-ico">↗</span><span class="ib-label">分享</span></button>
@@ -83,6 +83,13 @@ try {
 <main id="main" class="hidden">
   <div id="banner" class="banner hidden"></div>
 
+  <!-- 今日主题：把今日话题前置到首屏，点它进漂流瓶 -->
+  <button id="topicBar" class="topic-bar" type="button">
+    <span class="tb-tag">今日主题</span>
+    <span class="tb-text" id="topicBarText"></span>
+    <span class="tb-go">›</span>
+  </button>
+
   <div class="weekbar">
     <button id="wkPrev" class="wk-btn" aria-label="上一周">‹</button>
     <button id="wkLabel" class="wk-label"></button>
@@ -115,7 +122,7 @@ try {
   <div id="forumBody" class="forum-body"></div>
 </section>
 
-<!-- 今日一漂 -->
+<!-- 漂流瓶 -->
 <section id="drift" class="hidden">
   <div class="drift-head" id="driftHead"></div>
   <div id="driftBody" class="drift-body"></div>
