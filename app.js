@@ -1402,27 +1402,54 @@ async function loadSponsors() {
 
 /* ---------------- 漂流瓶 · 话题库 ----------------
    数据在 data/topics.json，人工手改提交即可（作者会随时补充）。
-   结构：[{ "date":"2026-09-15", "text":"今天最想逃的一节课是？", "tag":"课业" }]
-   date/text 必填，tag 可选；同一天多条时取第一条（确定性）。
+   **每天 3–5 个话题**，结构：
+   [{ "date":"2026-09-15", "topics":[ {"key":"apple","text":"…","tag":"生活"}, … ] }]
+   date 必填；topics 为当天的话题数组（key 在同一期内唯一，用于瓶子归属；text 必填；tag 可选）。
+   也兼容旧的「一天一条」格式 { date, text, tag } —— 会被当成只有一个话题。
    ⚠️ 该文件已加入 sw.js 的 CORE，走协商缓存 —— 改完提交即生效，无需升 CACHE。 */
 let TOPICS = [];
 /* 兜底话题：topics.json 缺失、当天没排、或数组为空时使用，保证功能永远可用 */
-const FALLBACK_TOPIC = { text: "今天想对国科大的同学说点什么？", tag: "随便聊聊" };
+const FALLBACK_TOPIC = { key: "", text: "今天想对国科大的同学说点什么？", tag: "随便聊聊" };
+/* 「不拘话题」：不归属任何具体话题，投进大杂烩池。key 为空字符串 */
+const UNNAMED_TOPIC = { key: "", text: "不拘话题", tag: "" };
+
+/* 账户等级：0 临时（未注册）/ 1 正式（已注册）/ 2 高级（已注册且连续登录 ≥3 天）
+   服务端 drift_level() 才是权威，这里只用于界面展示与本地校验。 */
+const LEVEL_NAMES = ["临时账户", "正式用户", "高级用户"];
+function levelOf(user, streak) {
+  if (!user) return 0;
+  return (Number(streak) || 0) >= 3 ? 2 : 1;
+}
+/* 等级 → 每日可投 / 可捞次数（与 sql/drift_v2.sql 的 drift_quota_of 保持一致） */
+function quotaOf(level) {
+  const l = Number(level) || 0;
+  if (l >= 2) return 10;
+  return l === 1 ? 5 : 3;
+}
 
 async function loadTopics() {
   try {
     const r = await fetch("./data/topics.json");
     if (!r.ok) return;
     const d = await r.json();
-    if (Array.isArray(d)) TOPICS = d.filter(x => x && x.date && x.text);
+    if (Array.isArray(d)) TOPICS = d.filter(x => x && x.date && (Array.isArray(x.topics) || x.text));
   } catch (e) {}
 }
 
-/* 按日期取当天话题；取不到返回 null（调用方走 FALLBACK_TOPIC 兜底） */
+/* 当天话题列表；取不到返回空数组（调用方走 FALLBACK_TOPIC 兜底） */
+function pickTodayTopics(topics, ds) {
+  if (!Array.isArray(topics)) return [];
+  for (const d of topics) {
+    if (!d || d.date !== ds) continue;
+    if (Array.isArray(d.topics)) return d.topics.filter(t => t && t.text);
+    if (d.text) return [{ key: "", text: d.text, tag: d.tag || "" }];  /* 兼容旧格式 */
+  }
+  return [];
+}
+/* 取当天第一条（旧调用点与单测用） */
 function pickTodayTopic(topics, ds) {
-  if (!Array.isArray(topics)) return null;
-  for (const t of topics) if (t && t.date === ds && t.text) return t;
-  return null;
+  const list = pickTodayTopics(topics, ds);
+  return list.length ? list[0] : null;
 }
 
 /* 内容规范化：压缩空白 + 去掉首尾 + 截 100 字；空串返回 null。
@@ -1431,14 +1458,6 @@ function normalizeDriftContent(s) {
   const t = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
   if (!t) return null;
   return t.length > 100 ? t.slice(0, 100) : t;
-}
-
-/* 剩余捞瓶额度：3 × 今日投稿数，封顶 5，减去今日已捞，不为负。
-   与 sql/drift_setup.sql 里 drift_quota() 的口径保持一致（服务端才是权威）。 */
-function driftQuota(answered, fished) {
-  const a = Math.max(0, Number(answered) || 0);
-  const f = Math.max(0, Number(fished) || 0);
-  return Math.max(0, Math.min(5, 3 * a) - f);
 }
 
 function buildSponsorBar() {
@@ -3606,13 +3625,17 @@ async function downloadForumFile(p) {
   }
 }
 
-/* ---------------- 漂流瓶（匿名话题作答 + 随机捞瓶） ----------------
-   每天一个话题，匿名作答：用随机设备号作身份，**不需要登录**。
-   核心机制「答了才能捞」—— 把漂流瓶的双边市场压成单边，人少也转得起来。
-   三张表对前端全锁，读写一律走 SECURITY DEFINER RPC；额度与去重的权威在服务端，
-   这里算的 driftQuota 只用于展示。
-   详见 sql/drift_setup.sql、data/topics.json。 */
-let driftCtx = { topic: null, status: null, bottle: null, liked: false, eggCount: 0, eggText: "" };
+/* ---------------- 漂流瓶（每天多话题 + 匿名作答 + 随机捞瓶 + 账户等级） ----------------
+   每天有 3–5 个话题（data/topics.json），也可以选「不拘话题」投进大杂烩池；
+   捞瓶默认跨全部话题。匿名身份是随机设备号，**不需要登录**。
+   每日额度按账户等级（服务端权威，这里只展示）：
+     临时（未注册）3 投 / 3 捞 · 正式（已注册）5 / 5 · 高级（连续登录 ≥3 天）10 / 10
+   连续登录以「打开 App」为准，由 drift_checkin 维护（见 sql/drift_v2.sql）。
+   表对前端全锁，读写一律走 SECURITY DEFINER RPC。 */
+let driftCtx = {
+  topics: [], status: null, bottle: null, liked: false,
+  eggCount: 0, eggText: "", topicKey: ""
+};
 
 /* 匿名身份：复用日活统计那套随机设备号（同一台设备在漂流瓶里是同一个"人"） */
 function driftDid() {
@@ -3629,19 +3652,25 @@ function driftDateOffset(days) {
   d.setDate(d.getDate() + days);
   return dateStrOf(d);
 }
-/* 当天话题；topics.json 缺失 / 当天没排时走兜底，保证功能永远可用 */
-function driftTopic() {
+
+/* 当天话题列表（3–5 个）；topics.json 缺失 / 当天没排时走兜底，保证功能永远可用 */
+function driftTopics() {
   const ds = todayStr();
-  const t = pickTodayTopic(TOPICS, ds);
-  return t ? { date: ds, text: t.text, tag: t.tag || "" }
-           : { date: ds, text: FALLBACK_TOPIC.text, tag: FALLBACK_TOPIC.tag };
+  const list = pickTodayTopics(TOPICS, ds);
+  return list.length ? list : [Object.assign({}, FALLBACK_TOPIC)];
+}
+/* 话题标签文案：'' = 不拘话题；找不到（话题库改过）返回空串 */
+function driftTopicLabel(key, list) {
+  if (!key) return "不拘话题";
+  const t = (list || driftCtx.topics).find(x => x && x.key === key);
+  return t ? t.text : "";
 }
 
 /* 课表页顶部的「今日主题」栏：把今日话题前置到首屏，点它进漂流瓶。
    话题只在启动时加载一次，这里只负责把文案贴上去（render() 每次调用都很廉价）。 */
 function renderTopicBar() {
   const txt = $("topicBarText");
-  if (txt) txt.textContent = driftTopic().text;
+  if (txt) txt.textContent = driftTopics().map(t => t.text).join(" · ");
 }
 /* 池子捞空时的彩蛋文案（轮换，避免每次都一样） */
 const DRIFT_EMPTY = [
@@ -3652,21 +3681,36 @@ const DRIFT_EMPTY = [
 ];
 function driftEmptyText(i) { return DRIFT_EMPTY[Math.abs(Number(i) || 0) % DRIFT_EMPTY.length]; }
 
-/* ---- 与 Supabase 的 4 个调用（全部经 withFailover 线路轮换） ---- */
-async function driftApiStatus() {
-  const r = await withFailover((c) => c.rpc("drift_status", { p_did: driftDid(), p_topic_date: todayStr() }));
+/* ---- 与 Supabase 的调用（全部经 withFailover 线路轮换） ---- */
+/* 签到：维护连续登录天数（打开 App 即算），并拿回等级与今日剩余额度 */
+async function driftApiCheckin() {
+  const r = await withFailover((c) => c.rpc("drift_checkin", {
+    p_did: driftDid(), p_user: authUser ? authUser.id : null
+  }));
   if (r && r.error) throw new Error(r.error.message || "读取失败");
   const d = r && r.data;
-  return (d && typeof d === "object") ? d : { answered: 0, fished: 0, quota: 0, wall: [] };
+  return (d && typeof d === "object") ? d : {};
 }
-async function driftApiSubmit(body) {
+async function driftApiStatus() {
+  const r = await withFailover((c) => c.rpc("drift_status", {
+    p_did: driftDid(), p_topic_date: todayStr(), p_user: authUser ? authUser.id : null
+  }));
+  if (r && r.error) throw new Error(r.error.message || "读取失败");
+  const d = r && r.data;
+  return (d && typeof d === "object")
+    ? d : { level: 0, streak: 0, quota: 0, thrown: 0, fished: 0, throw_left: 0, fish_left: 0, wall: [] };
+}
+async function driftApiSubmit(body, topicKey) {
   const r = await withFailover((c) => c.rpc("drift_submit", {
-    p_did: driftDid(), p_topic_date: todayStr(), p_content: body
+    p_did: driftDid(), p_topic_date: todayStr(), p_content: body,
+    p_topic_key: topicKey || "", p_user: authUser ? authUser.id : null
   }));
   if (r && r.error) throw new Error(r.error.message || "投瓶失败");
 }
 async function driftApiFish() {
-  const r = await withFailover((c) => c.rpc("drift_fish", { p_did: driftDid(), p_topic_date: todayStr() }));
+  const r = await withFailover((c) => c.rpc("drift_fish", {
+    p_did: driftDid(), p_topic_date: todayStr(), p_user: authUser ? authUser.id : null
+  }));
   if (r && r.error) throw new Error(r.error.message || "捞瓶失败");
   const row = Array.isArray(r.data) ? r.data[0] : r.data;
   return row || { egg: true };
@@ -3678,11 +3722,12 @@ async function driftApiLike(id) {
 }
 
 function showDrift() {
-  driftCtx.topic = driftTopic();
+  driftCtx.topics = driftTopics();
   driftCtx.status = null;
   driftCtx.bottle = null;
   driftCtx.liked = false;
   driftCtx.eggCount = 0;
+  driftCtx.topicKey = driftCtx.topics[0] ? driftCtx.topics[0].key : "";
   $("welcome").classList.add("hidden");
   $("main").classList.add("hidden");
   $("schoolPick").classList.add("hidden");
@@ -3692,7 +3737,14 @@ function showDrift() {
   renderDrift();
   driftApiStatus()
     .then((st) => { driftCtx.status = st; renderDrift(); })
-    .catch(() => { driftCtx.status = { answered: 0, fished: 0, quota: 0, wall: [] }; renderDrift(); });
+    .catch(() => {
+      /* 读取失败：按本地已知的等级给一个乐观额度，让用户至少能尝试（服务端会再拦一次） */
+      const lv = levelOf(authUser, 0);
+      const q = quotaOf(lv);
+      driftCtx.status = { level: lv, streak: 0, quota: q, thrown: 0, fished: 0,
+        throw_left: q, fish_left: q, wall: [] };
+      renderDrift();
+    });
 }
 function closeDrift() {
   $("drift").classList.add("hidden");
@@ -3711,28 +3763,48 @@ function renderDrift() {
 
   const body = $("driftBody");
   body.innerHTML = "";
-  const tp = driftCtx.topic || driftTopic();
   const st = driftCtx.status;
-
-  const topic = el("div", "drift-topic");
-  topic.appendChild(el("div", "drift-topic-day", tp.date + " · 今天的话题"));
-  topic.appendChild(el("div", "drift-topic-q", tp.text));
-  if (tp.tag) topic.appendChild(el("div", "drift-topic-tag", tp.tag));
-  body.appendChild(topic);
 
   if (!st) { body.appendChild(el("div", "f-loading", "正在读取…")); return; }
 
-  const q = el("div", "drift-quota");
-  q.appendChild(el("span", "", "今日还可捞"));
-  q.appendChild(el("b", "", String(st.quota)));
-  q.appendChild(el("span", "", "个瓶子（已捞 " + (st.fished || 0) + "）"));
-  body.appendChild(q);
+  /* 等级与今日额度 */
+  const lv = el("div", "drift-quota");
+  lv.appendChild(el("span", "badge blue", LEVEL_NAMES[st.level] || "临时账户"));
+  if ((st.level || 0) >= 1) lv.appendChild(el("span", "", "连续登录 " + (st.streak || 0) + " 天"));
+  lv.appendChild(el("span", "", "· 今日还可投"));
+  lv.appendChild(el("b", "", String(st.throw_left)));
+  lv.appendChild(el("span", "", "次 · 捞"));
+  lv.appendChild(el("b", "", String(st.fish_left)));
+  lv.appendChild(el("span", "", "次"));
+  body.appendChild(lv);
 
-  /* 作答区：每设备每天只能投 1 瓶 */
-  if (st.answered > 0) {
-    body.appendChild(el("div", "f-tip", "你已经投过一个瓶子了，明天再来投 👌"));
+  /* 话题选择：今日话题（3–5 个）+ 「不拘话题」 */
+  const chips = el("div", "f-chips");
+  chips.appendChild(el("span", "drift-ask", "投给哪个话题？"));
+  driftCtx.topics.concat([UNNAMED_TOPIC]).forEach((t) => {
+    const c = el("button", "f-chip" + (driftCtx.topicKey === t.key ? " on" : ""), t.text);
+    c.type = "button";
+    c.addEventListener("click", () => { driftCtx.topicKey = t.key; renderDrift(); });
+    chips.appendChild(c);
+  });
+  body.appendChild(chips);
+
+  /* 投稿区：额度用完时给升级引导 */
+  if ((st.throw_left || 0) <= 0) {
+    const tip = driftUpgradeTip(st);
+    const box = el("div", "drift-egg");
+    box.appendChild(el("div", "", tip.tip));
+    if (tip.btn) {
+      const b = el("button", "r-btn", tip.btn);
+      b.style.marginTop = "10px";
+      b.addEventListener("click", showAuthModal);
+      box.appendChild(b);
+    }
+    body.appendChild(box);
   } else {
     const wrap = el("div", "drift-compose");
+    wrap.appendChild(el("div", "drift-answer",
+      "正在回答：" + (driftTopicLabel(driftCtx.topicKey) || "不拘话题")));
     const ta = el("textarea");
     ta.placeholder = "匿名写点什么…（≤100 字，没人知道是你）";
     ta.spellcheck = false;
@@ -3748,7 +3820,7 @@ function renderDrift() {
       if (!body2) { toast("先写点什么吧"); return; }
       busy = true; btn.disabled = true; btn.textContent = "投出中…";
       try {
-        await driftApiSubmit(body2);
+        await driftApiSubmit(body2, driftCtx.topicKey);
         toast("瓶子已经漂出去了 🫧");
         driftCtx.status = await driftApiStatus();
         renderDrift();
@@ -3762,16 +3834,38 @@ function renderDrift() {
     body.appendChild(wrap);
   }
 
-  /* 刚捞到的瓶子 / 彩蛋 */
+  /* 捞瓶 */
+  const fishLeft = st.fish_left || 0;
+  const fishBtn = el("button", "drift-fish", fishLeft > 0 ? "🎣 捞一个瓶子" : "今天能捞的都捞完了");
+  fishBtn.disabled = fishLeft <= 0;
+  fishBtn.addEventListener("click", async () => {
+    fishBtn.disabled = true; fishBtn.textContent = "正在捞…";
+    try {
+      const row = await driftApiFish();
+      driftCtx.bottle = row;
+      driftCtx.liked = false;
+      if (row && row.egg) driftCtx.eggCount++;
+      driftCtx.status = await driftApiStatus();
+      renderDrift();
+    } catch (e) {
+      toast((e && e.message) || "捞瓶失败");
+      fishBtn.disabled = false; fishBtn.textContent = "🎣 捞一个瓶子";
+    }
+  });
+  body.appendChild(fishBtn);
+
+  /* 刚捞到的瓶子（带所属话题）/ 彩蛋 */
   const b = driftCtx.bottle;
   if (b) {
     if (b.egg) {
-      const msg = st.quota <= 0
+      const msg = fishLeft <= 0
         ? "今天能捞的都捞完了，明天再来 🌙"
         : driftEmptyText(driftCtx.eggCount - 1);
       body.appendChild(el("div", "drift-egg", msg));
     } else {
       const card = el("div", "drift-bottle");
+      const lb = driftTopicLabel(b.topic_key);
+      if (lb) card.appendChild(el("div", "drift-bottle-tag", lb));
       card.appendChild(el("div", "drift-bottle-txt", b.content));
       const row = el("div", "drift-bottle-row");
       const like = el("button", "drift-like" + (driftCtx.liked ? " on" : ""), "♥ 共鸣 " + (b.likes || 0));
@@ -3795,38 +3889,31 @@ function renderDrift() {
     }
   }
 
-  const fishBtn = el("button", "drift-fish", st.quota > 0 ? "🎣 捞一个瓶子" : "今天的额度用完了");
-  fishBtn.disabled = st.quota <= 0;
-  fishBtn.addEventListener("click", async () => {
-    fishBtn.disabled = true; fishBtn.textContent = "正在捞…";
-    try {
-      const row = await driftApiFish();
-      driftCtx.bottle = row;
-      driftCtx.liked = false;
-      if (row && row.egg) driftCtx.eggCount++;
-      driftCtx.status = await driftApiStatus();
-      renderDrift();
-    } catch (e) {
-      toast((e && e.message) || "捞瓶失败");
-      fishBtn.disabled = false; fishBtn.textContent = "🎣 捞一个瓶子";
-    }
-  });
-  body.appendChild(fishBtn);
-
-  /* 昨日最共鸣 Top3（不展示长尾） */
+  /* 昨日最共鸣 Top3（不展示长尾），每条带所属话题 */
   const wall = Array.isArray(st.wall) ? st.wall : [];
   if (wall.length) {
-    const yt = pickTodayTopic(TOPICS, driftDateOffset(-1));
+    const yList = pickTodayTopics(TOPICS, driftDateOffset(-1));
     body.appendChild(el("div", "drift-wall-t", "昨天的共鸣榜"));
-    body.appendChild(el("div", "drift-wall-sub", "「" + ((yt && yt.text) || "昨天的话题") + "」"));
     wall.forEach((w, i) => {
       const it = el("div", "drift-wall-item");
       it.appendChild(el("div", "drift-wall-rank", String(i + 1)));
-      it.appendChild(el("div", "drift-wall-txt", w.content || ""));
+      const mid = el("div", "drift-wall-mid");
+      const tl = w.topic_key === "" ? "不拘话题"
+        : (((yList.find(x => x.key === w.topic_key) || {}).text) || "");
+      if (tl) mid.appendChild(el("div", "drift-wall-topic", tl));
+      mid.appendChild(el("div", "drift-wall-txt", w.content || ""));
+      it.appendChild(mid);
       it.appendChild(el("div", "drift-wall-like", "♥ " + (w.likes || 0)));
       body.appendChild(it);
     });
   }
+}
+
+/* 额度用完时的升级引导（按等级给不同文案） */
+function driftUpgradeTip(st) {
+  if ((st.level || 0) === 0) return { tip: "临时账户每天 3 次。注册成正式用户，每天 5 次", btn: "注册 / 登录" };
+  if ((st.level || 0) === 1) return { tip: "正式用户每天 5 次。连续登录 3 天升为高级用户，每天 10 次", btn: null };
+  return { tip: "高级用户今天的额度用完了，明天再来 🌙" };
 }
 
 /* ---------------- 初始化 ---------------- */
@@ -4008,6 +4095,7 @@ function applySchoolConfig(cfg) {
 async function startApp() {
   try { await loadSponsors(); } catch (e) {} /* 广告数据就位后再首屏渲染 */
   try { await loadTopics(); } catch (e) {}   /* 漂流瓶话题库就位后再首屏渲染 */
+  try { driftApiCheckin().catch(() => {}); } catch (e) {}   /* 连续登录签到（打开 App 即算，失败静默） */
   init();
   statsPing();
   if (authUser) pullAndMerge();
@@ -4206,7 +4294,8 @@ if (typeof module !== "undefined" && module.exports) {
     dateStrOf, todayStr, esc, wmoIcon, wmoShort,
     buildReminderJobs,
     PROXY_SOURCES, SUPABASE_KEY,
-    pickTodayTopic, driftQuota, normalizeDriftContent, defaultPushPrefs,
+    pickTodayTopic, pickTodayTopics, normalizeDriftContent, defaultPushPrefs,
+    levelOf, quotaOf, LEVEL_NAMES, UNNAMED_TOPIC,
     __setRecords: (o) => { state.records = o || {}; } /* 仅供测试注入微调数据 */
   };
 }

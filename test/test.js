@@ -243,27 +243,40 @@ const jNoDrift = app.buildReminderJobs(pCourses, pRecords, pushNow, 30,
   { morning: true, ddl: true, weekly: true, drift: false });
 ok(!jNoDrift.some(j => j.tag.startsWith("f-")), "关闭 drift 偏好后不再生成 f- 任务");
 
-console.log("== 漂流瓶：话题挑选 ==");
+console.log("== 漂流瓶：话题挑选（每天多话题）==");
 const tpList = [
-  { date: "2026-09-15", text: "话题A" },
-  { date: "2026-09-16", text: "话题B" },
-  { date: "2026-09-16", text: "话题B2" },
-  { date: "2026-09-17", text: "" }
+  { date: "2026-09-15", topics: [
+    { key: "a", text: "话题A" }, { key: "b", text: "话题B" }, { key: "c", text: "话题C" }
+  ]},
+  { date: "2026-09-16", topics: [
+    { key: "d", text: "话题D" }, { key: "", text: "不拘话题" }
+  ]},
+  { date: "2026-09-17", topics: [
+    { key: "e", text: "" }
+  ]},
+  { date: "2026-09-18", text: "旧格式单话题" }
 ];
-ok(app.pickTodayTopic(tpList, "2026-09-15").text === "话题A", "命中当天话题");
-ok(app.pickTodayTopic(tpList, "2026-09-16").text === "话题B", "同一天多条时取第一条");
-ok(app.pickTodayTopic(tpList, "2026-09-17") === null, "当天条目 text 为空视为没有");
-ok(app.pickTodayTopic(tpList, "2026-09-14") === null, "日期不匹配返回 null");
-ok(app.pickTodayTopic([], "2026-09-15") === null, "空话题库返回 null");
-ok(app.pickTodayTopic(null, "2026-09-15") === null, "话题库为 null 返回 null");
+ok(app.pickTodayTopics(tpList, "2026-09-15").length === 3, "命中当天的话题数组");
+ok(app.pickTodayTopics(tpList, "2026-09-15")[0].key === "a", "话题顺序与库一致");
+ok(app.pickTodayTopics(tpList, "2026-09-16").length === 2, "key 为空的话题（不拘话题）保留");
+ok(app.pickTodayTopics(tpList, "2026-09-17").length === 0, "text 为空的话题被过滤");
+ok(app.pickTodayTopics(tpList, "2026-09-18").length === 1, "兼容旧格式（一天一条）");
+ok(app.pickTodayTopics(tpList, "2026-09-14").length === 0, "日期不匹配返回空数组");
+ok(app.pickTodayTopics([], "2026-09-15").length === 0, "空话题库返回空数组");
+ok(app.pickTodayTopics(null, "2026-09-15").length === 0, "话题库为 null 返回空数组");
+ok(app.pickTodayTopic(tpList, "2026-09-15").key === "a", "pickTodayTopic 取当天第一条");
+ok(app.pickTodayTopic(tpList, "2026-09-19") === null, "pickTodayTopic 无匹配返回 null");
+ok(app.UNNAMED_TOPIC.key === "" && app.UNNAMED_TOPIC.text === "不拘话题", "「不拘话题」常量就位");
 
-console.log("== 漂流瓶：额度与内容 ==");
-ok(app.driftQuota(0, 0) === 0, "没答题没额度");
-ok(app.driftQuota(1, 0) === 3, "答一题得 3 次");
-ok(app.driftQuota(1, 3) === 0, "用完为 0");
-ok(app.driftQuota(1, 5) === 0, "超额不为负");
-ok(app.driftQuota(2, 0) === 5, "多投封顶 5 次");
-ok(app.driftQuota(0, 3) === 0, "没答题即使有捞取记录也为 0");
+console.log("== 漂流瓶：账户等级与每日额度 ==");
+ok(app.levelOf(null, 0) === 0 && app.levelOf(null, 99) === 0, "未注册 = 临时账户（0）");
+ok(app.levelOf("u1", 0) === 1 && app.levelOf("u1", 2) === 1, "已注册但连续 <3 天 = 正式用户（1）");
+ok(app.levelOf("u1", 3) === 2 && app.levelOf("u1", 30) === 2, "连续登录 ≥3 天 = 高级用户（2）");
+ok(app.quotaOf(0) === 3, "临时账户 3 次/天");
+ok(app.quotaOf(1) === 5, "正式用户 5 次/天");
+ok(app.quotaOf(2) === 10, "高级用户 10 次/天");
+ok(app.quotaOf(9) === 10, "未知等级按最高处理");
+ok(app.LEVEL_NAMES.length === 3 && app.LEVEL_NAMES[0] === "临时账户", "等级名称表就位");
 ok(app.normalizeDriftContent("  a   b  ") === "a b", "内容压缩空白并去首尾");
 ok(app.normalizeDriftContent("   ") === null, "内容全空白返回 null");
 ok(app.normalizeDriftContent("x".repeat(120)).length === 100, "内容超长截断到 100 字");

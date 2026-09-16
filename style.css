@@ -951,6 +951,8 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .drift-bottle { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
   padding: 15px; animation: bannerIn .28s var(--ease) both; }
 .drift-bottle-txt { font-size: 15.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+.drift-bottle-tag { display: inline-block; margin-bottom: 7px; font-size: 11px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; }
 .drift-bottle-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .drift-like { border: none; border-radius: 99px; background: #f0f2f7; color: var(--muted);
   font-family: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; cursor: pointer; }
@@ -960,12 +962,19 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
   border-radius: 14px; padding: 18px 15px; text-align: center; font-size: 13.5px; line-height: 1.8; color: #1d3f8f; }
 
 .drift-wall-t { font-size: 13px; font-weight: 700; margin: 6px 0 0; }
-.drift-wall-sub { font-size: 11.5px; color: var(--muted); margin: 2px 0 0; }
 .drift-wall-item { display: flex; align-items: flex-start; gap: 10px; background: var(--card);
   border: 1px solid var(--line); border-radius: 12px; padding: 12px 13px; }
 .drift-wall-rank { flex: none; width: 18px; font-size: 15px; font-weight: 700; color: var(--muted); }
-.drift-wall-txt { flex: 1; min-width: 0; font-size: 14px; line-height: 1.65; word-break: break-word; }
+.drift-wall-mid { flex: 1; min-width: 0; }
+.drift-wall-topic { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+.drift-wall-txt { font-size: 14px; line-height: 1.65; word-break: break-word; }
 .drift-wall-like { flex: none; font-size: 12px; font-weight: 600; color: #d4537e; }
+
+/* 话题选择 chips 与「正在回答」提示（复用论坛的 .f-chip 样式） */
+.drift-ask { flex: none; align-self: center; font-size: 12.5px; color: var(--muted); }
+.drift-answer { font-size: 12.5px; color: var(--muted); }
+.drift-answer::before { content: "「"; color: var(--primary); }
+.drift-answer::after { content: "」"; color: var(--primary); }
 
 [data-theme="dark"] .drift-fish { border-color: rgba(90, 147, 255, .45); background: #182338; }
 [data-theme="dark"] .drift-fish:active { background: #1e2b4a; }
