@@ -3819,6 +3819,35 @@ function driftMineSummary(mine) {
   };
 }
 
+/* 消息红点：未读 = 当前「收到共鸣 + 收到回复」总量 − 上次查看消息页时的量。
+   打开消息页即清零（ seen 存 kebiao:msgseen）。 */
+const MSG_SEEN_KEY = "kebiao:msgseen";
+function msgSeenLoad() {
+  try {
+    const s = JSON.parse(localStorage.getItem(MSG_SEEN_KEY));
+    if (s && typeof s === "object") return s;
+  } catch (e) {}
+  return { likes: 0, replies: 0 };
+}
+function msgSeenSave(s) {
+  try { localStorage.setItem(MSG_SEEN_KEY, JSON.stringify({ likes: s.likes || 0, replies: s.replies || 0 })); } catch (e) {}
+}
+function msgUnreadCount(mine) {
+  const s = driftMineSummary(mine);
+  const seen = msgSeenLoad();
+  return Math.max(0, s.likes - (Number(seen.likes) || 0)) + Math.max(0, s.replies - (Number(seen.replies) || 0));
+}
+function renderMsgDot(n) {
+  const d = $("msgDot");
+  if (!d) return;
+  if (n > 0) { d.classList.remove("hidden"); d.textContent = n > 99 ? "99+" : String(n); }
+  else { d.classList.add("hidden"); d.textContent = ""; }
+}
+/* 启动时拉一次消息数据来点亮红点（失败静默，红点保持原样） */
+async function refreshMsgBadge() {
+  try { renderMsgDot(msgUnreadCount(await driftMineApi())); } catch (e) {}
+}
+
 function showDrift() {
   driftCtx.topics = driftTopics();
   driftCtx.status = null;
@@ -4061,7 +4090,12 @@ function showMsg() {
   window.scrollTo(0, 0);
   renderMsg();
   driftMineApi()
-    .then((mine) => { msgCtx.mine = mine; renderMsg(); })
+    .then((mine) => {
+      msgCtx.mine = mine;
+      renderMsg();
+      msgSeenSave(driftMineSummary(mine));   /* 看过即清零红点 */
+      renderMsgDot(0);
+    })
     .catch(() => {
       msgCtx.mine = { thrown: [], fished: [], likes_total: 0, error: true };
       renderMsg();
@@ -4112,7 +4146,7 @@ function renderMsg() {
 
   /* 收到的回复（别人对我瓶子的「接一句」，匿名） */
   const replies = Array.isArray(mine.replies) ? mine.replies : [];
-  body.appendChild(el("div", "drift-wall-t", "收到的回复" + (s.replies ? "（" + s.replies + "）" : "")));
+  body.appendChild(el("div", "msg-sec", "收到的回复" + (s.replies ? "（" + s.replies + "）" : "")));
   if (!replies.length) {
     body.appendChild(el("div", "f-tip", "还没有回复。瓶子被捞到后，对方可以接一句"));
   } else {
@@ -4130,7 +4164,7 @@ function renderMsg() {
   }
 
   /* 我投出的瓶子 */
-  body.appendChild(el("div", "drift-wall-t", "我投出的瓶子"));
+  body.appendChild(el("div", "msg-sec", "我投出的瓶子"));
   const thrown = Array.isArray(mine.thrown) ? mine.thrown : [];
   if (!thrown.length) {
     body.appendChild(el("div", "f-tip", "还没投过瓶子。去漂流瓶写一句吧 🫧"));
@@ -4152,7 +4186,7 @@ function renderMsg() {
   }
 
   /* 我捞到的瓶子 */
-  body.appendChild(el("div", "drift-wall-t", "我捞到的瓶子"));
+  body.appendChild(el("div", "msg-sec", "我捞到的瓶子"));
   const fished = Array.isArray(mine.fished) ? mine.fished : [];
   if (!fished.length) {
     body.appendChild(el("div", "f-tip", "还没捞过瓶子。去漂流瓶碰碰运气 🎣"));
@@ -4356,6 +4390,7 @@ async function startApp() {
   try { await loadSponsors(); } catch (e) {} /* 广告数据就位后再首屏渲染 */
   try { await loadTopics(); } catch (e) {}   /* 漂流瓶话题库就位后再首屏渲染 */
   try { driftApiCheckin().catch(() => {}); } catch (e) {}   /* 连续登录签到（打开 App 即算，失败静默） */
+  refreshMsgBadge();   /* 消息红点：有新共鸣/回复时顶栏「消息」按钮亮小红点 */
   init();
   statsPing();
   if (authUser) pullAndMerge();
@@ -4557,7 +4592,7 @@ if (typeof module !== "undefined" && module.exports) {
     buildReminderJobs,
     PROXY_SOURCES, SUPABASE_KEY,
     pickTodayTopic, pickTodayTopics, normalizeDriftContent, defaultPushPrefs,
-    levelOf, quotaOf, LEVEL_NAMES, UNNAMED_TOPIC, driftMineSummary,
+    levelOf, quotaOf, LEVEL_NAMES, UNNAMED_TOPIC, driftMineSummary, msgUnreadCount,
     __setRecords: (o) => { state.records = o || {}; } /* 仅供测试注入微调数据 */
   };
 }

@@ -289,6 +289,12 @@ ok(app.driftMineSummary({ thrown: [], fished: [], replies_total: 4 }).replies ==
 ok(app.driftMineSummary({}).replies === 0, "汇总：回复缺字段兜底");
 ok(app.normalizeDriftContent("x".repeat(70), 50).length === 50, "接一句超长截断到 50 字");
 ok(app.normalizeDriftContent("x".repeat(120)).length === 100, "默认截断仍为 100 字");
+
+console.log("== 消息红点：未读计算 ==");
+ok(typeof app.msgUnreadCount({ thrown: [], fished: [], likes_total: 3, replies_total: 1 }) === "number", "红点：返回未读数");
+ok(app.msgUnreadCount({ thrown: [], fished: [], likes_total: 3, replies_total: 1 }) === 4, "红点：共鸣+回复计入未读");
+ok(app.msgUnreadCount({ thrown: [], fished: [], likes_total: 0, replies_total: 0 }) === 0, "红点：无互动为 0");
+ok(app.msgUnreadCount(null) === 0, "红点：null 兜底为 0");
 ok(app.normalizeDriftContent("  a   b  ") === "a b", "内容压缩空白并去首尾");
 ok(app.normalizeDriftContent("   ") === null, "内容全空白返回 null");
 ok(app.normalizeDriftContent("x".repeat(120)).length === 100, "内容超长截断到 100 字");
