@@ -3778,12 +3778,14 @@ function renderDrift() {
   lv.appendChild(el("span", "", "次"));
   body.appendChild(lv);
 
-  /* 话题选择：今日话题（3–5 个）+ 「不拘话题」 */
-  const chips = el("div", "f-chips");
-  chips.appendChild(el("span", "drift-ask", "投给哪个话题？"));
+  /* 话题选择：今日话题（3–5 个）+ 「不拘话题」——纵向全宽单选列表，手机上才读得清 */
+  const chips = el("div", "drift-chips");
+  chips.appendChild(el("div", "drift-ask", "投给哪个话题？"));
   driftCtx.topics.concat([UNNAMED_TOPIC]).forEach((t) => {
-    const c = el("button", "f-chip" + (driftCtx.topicKey === t.key ? " on" : ""), t.text);
+    const c = el("button", "drift-chip" + (driftCtx.topicKey === t.key ? " on" : ""));
     c.type = "button";
+    c.appendChild(el("span", "drift-chip-txt", t.text));
+    if (t.tag) c.appendChild(el("span", "drift-chip-tag", t.tag));
     c.addEventListener("click", () => { driftCtx.topicKey = t.key; renderDrift(); });
     chips.appendChild(c);
   });

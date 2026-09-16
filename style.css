@@ -970,8 +970,22 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .drift-wall-txt { font-size: 14px; line-height: 1.65; word-break: break-word; }
 .drift-wall-like { flex: none; font-size: 12px; font-weight: 600; color: #d4537e; }
 
-/* 话题选择 chips 与「正在回答」提示（复用论坛的 .f-chip 样式） */
-.drift-ask { flex: none; align-self: center; font-size: 12.5px; color: var(--muted); }
+/* 话题选择：纵向全宽单选列表（论坛的横向胶囊 .f-chip 在 5 个选项时会被挤成竖条，不可读） */
+.drift-chips { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 10px; }
+.drift-ask { font-size: 12.5px; color: var(--muted); margin-bottom: 2px; }
+.drift-chip { display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 12px 13px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); font-size: 14.5px;
+  cursor: pointer; text-align: left; font-family: inherit; }
+.drift-chip::before { content: ""; flex: none; width: 9px; height: 9px;
+  border-radius: 50%; border: 2px solid var(--line); background: transparent; }
+.drift-chip.on { border-color: var(--primary); background: rgba(47, 111, 237, .07);
+  color: var(--primary); font-weight: 600; }
+.drift-chip.on::before { border-color: var(--primary); background: var(--primary); }
+.drift-chip-txt { flex: 1; min-width: 0; line-height: 1.5; word-break: break-word; }
+.drift-chip-tag { flex: none; font-size: 11px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; }
+[data-theme="dark"] .drift-chip.on { background: #16243d; }
 .drift-answer { font-size: 12.5px; color: var(--muted); }
 .drift-answer::before { content: "「"; color: var(--primary); }
 .drift-answer::after { content: "」"; color: var(--primary); }
