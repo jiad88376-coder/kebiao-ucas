@@ -323,8 +323,6 @@ function applyTheme(pref) {
   const resolved = resolvedTheme(pref);
   document.documentElement.dataset.theme = resolved;
   applyThemeMeta(pref === "auto" ? null : resolved);
-  const btn = $("btnTheme");
-  if (btn) btn.textContent = pref === "dark" ? "🌙" : pref === "light" ? "☀️" : "🌗";
 }
 function cycleTheme() {
   const order = ["auto", "dark", "light"];
@@ -2927,6 +2925,7 @@ function showMoreMenu() {
         <button class="menu-item" id="mmInstall"><span class="mi-ico">📲</span><span>安装成手机 App</span></button>
         <button class="menu-item" id="mmPush"><span class="mi-ico">🔔</span><span>消息提醒（手机推送）</span></button>
         <button class="menu-item" id="mmWidget"><span class="mi-ico">⏰</span><span>桌面快捷方式 / 下节课直达</span></button>
+        <button class="menu-item" id="mmTheme"><span class="mi-ico">🌗</span><span>深色 / 浅色模式</span></button>
         <button class="menu-item" id="mmCodes"><span class="mi-ico">⌨️</span><span>粘贴课程代码</span></button>
         <button class="menu-item" id="mmBackup"><span class="mi-ico">⤓</span><span>备份与恢复</span></button>
       </div>
@@ -2950,6 +2949,7 @@ function showMoreMenu() {
   $("mmCodes").addEventListener("click", () => { hideModal(); showCodesModal(); });
   $("mmBackup").addEventListener("click", () => { hideModal(); backupModal(); });
   $("mmWidget").addEventListener("click", () => { hideModal(); showWidgetGuide(); });
+  $("mmTheme").addEventListener("click", () => { hideModal(); cycleTheme(); });
   $("mmMsg").addEventListener("click", () => { hideModal(); showMsg(); });
   $("mmDrift").addEventListener("click", () => { hideModal(); showDrift(); });
   $("mmForum").addEventListener("click", () => { hideModal(); showForum("list"); }); /* showForum 内部仍要求登录 */
@@ -3855,6 +3855,9 @@ function renderDrift() {
   back.addEventListener("click", closeDrift);
   head.appendChild(back);
   head.appendChild(el("div", "fb-title", "漂流瓶"));
+  const msgLink = el("button", "fb-msg", "📨 我的消息");
+  msgLink.addEventListener("click", showMsg);   /* 漂流瓶页的「我的消息」快捷入口 */
+  head.appendChild(msgLink);
 
   const body = $("driftBody");
   body.innerHTML = "";
@@ -4192,7 +4195,7 @@ function init() {
   $("btnDrift").addEventListener("click", showDrift); /* 匿名功能，不设登录门槛；论坛入口已挪进「更多」菜单 */
   $("topicBar").addEventListener("click", showDrift); /* 课表页的「今日主题」栏，点它进漂流瓶 */
   $("btnMore").addEventListener("click", showMoreMenu);
-  $("btnTheme").addEventListener("click", cycleTheme);
+  $("btnMsg").addEventListener("click", showMsg);
   applyTheme(themePref());
   /* 回到前台时刷新角标（今天剩余课程数） */
   document.addEventListener("visibilitychange", () => {
