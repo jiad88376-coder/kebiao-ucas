@@ -1452,12 +1452,13 @@ function pickTodayTopic(topics, ds) {
   return list.length ? list[0] : null;
 }
 
-/* 内容规范化：压缩空白 + 去掉首尾 + 截 100 字；空串返回 null。
+/* 内容规范化：压缩空白 + 去掉首尾 + 截断（默认 100 字，「接一句」传 50）；空串返回 null。
    前端先做一次只为即时反馈，服务端 RPC 会再校验一次（不可信前端）。 */
-function normalizeDriftContent(s) {
+function normalizeDriftContent(s, cap) {
+  const lim = Math.max(1, Number(cap) || 100);
   const t = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
   if (!t) return null;
-  return t.length > 100 ? t.slice(0, 100) : t;
+  return t.length > lim ? t.slice(0, lim) : t;
 }
 
 function buildSponsorBar() {
@@ -2146,6 +2147,47 @@ function showPushModal() {
   const close = el("button", "r-btn ghost", "关闭");
   close.addEventListener("click", hideModal);
   card.appendChild(close);
+  showModal(card);
+}
+
+/* 开推送软提醒：已安装（桌面图标打开）且还没开启的用户，每天最多弹一次。
+   勾选右下角「不再提醒」= 永久关闭（存 kebiao:push-remind-off）。 */
+const PUSH_REMIND_OFF_KEY = "kebiao:push-remind-off";
+const PUSH_REMIND_LAST_KEY = "kebiao:push-remind-last";
+function pushRemindDue() {
+  try {
+    if (!isStandalone()) return false;   /* 只提醒已安装的用户（浏览器里开着的不弹） */
+    if (localStorage.getItem(PUSH_REMIND_OFF_KEY) === "1") return false;
+    if (localStorage.getItem(PUSH_REMIND_LAST_KEY) === todayStr()) return false;
+  } catch (e) { return false; }
+  return true;
+}
+function maybeShowPushRemind() {
+  if (!pushSupported()) return;
+  if (!pushRemindDue()) return;
+  const on = !!pushSubscription && typeof Notification !== "undefined" && Notification.permission === "granted";
+  if (on) return;   /* 已经开着就不弹 */
+  try { localStorage.setItem(PUSH_REMIND_LAST_KEY, todayStr()); } catch (e) {}
+
+  const card = el("div", "modal-card");
+  card.appendChild(el("h3", "", "🔔 开启消息提醒？"));
+  card.appendChild(el("p", "share-hint", "第一时间知道：你的瓶子被捞了、被接了一句、收到共鸣，还有每天的今日话题与课程提醒。"));
+  const btn = el("button", "r-btn", "去开启");
+  btn.style.marginTop = "10px";
+  btn.addEventListener("click", () => { hideModal(); setTimeout(showPushModal, 250); });
+  card.appendChild(btn);
+  const foot = el("div", "pr-foot");
+  const lab = el("label", "pr-never");
+  const cb = el("input"); cb.type = "checkbox"; cb.id = "prNever";
+  cb.addEventListener("change", () => {
+    try { localStorage.setItem(PUSH_REMIND_OFF_KEY, cb.checked ? "1" : "0"); } catch (e) {}
+    if (cb.checked) { toast("好的，不会再提醒"); setTimeout(hideModal, 400); }
+  });
+  lab.appendChild(cb);
+  const t = el("span"); t.textContent = "不再提醒";
+  lab.appendChild(t);
+  foot.appendChild(lab);
+  card.appendChild(foot);
   showModal(card);
 }
 
@@ -3669,10 +3711,36 @@ function driftTopicLabel(key, list) {
 }
 
 /* 课表页顶部的「今日主题」栏：把今日话题前置到首屏，点它进漂流瓶。
-   话题只在启动时加载一次，这里只负责把文案贴上去（render() 每次调用都很廉价）。 */
+   多于一个话题时每 4 秒淡入淡出轮换（用户要求：不要只放一个）；只动文案，开销可忽略。 */
+let topicBarTimer = null;
+let topicBarIdx = 0;
+function stopTopicBarTimer() { if (topicBarTimer) { clearInterval(topicBarTimer); topicBarTimer = null; } }
 function renderTopicBar() {
   const txt = $("topicBarText");
-  if (txt) txt.textContent = driftTopics().map(t => t.text).join(" · ");
+  if (!txt) return;
+  const list = driftTopics();
+  if (list.length <= 1) {
+    txt.textContent = list[0] ? list[0].text : "";
+    stopTopicBarTimer();
+    return;
+  }
+  if (topicBarIdx >= list.length) topicBarIdx = 0;
+  txt.textContent = list[topicBarIdx].text;
+  if (topicBarTimer) return;
+  topicBarTimer = setInterval(() => {
+    const el2 = $("topicBarText");
+    if (!el2) { stopTopicBarTimer(); return; }
+    const t = driftTopics();
+    if (t.length <= 1) { el2.textContent = t[0] ? t[0].text : ""; stopTopicBarTimer(); return; }
+    topicBarIdx = (topicBarIdx + 1) % t.length;
+    el2.classList.add("tb-swap");
+    setTimeout(() => {
+      const el3 = $("topicBarText");
+      if (!el3) return;
+      el3.textContent = t[topicBarIdx].text;
+      el3.classList.remove("tb-swap");
+    }, 180);
+  }, 4000);
 }
 /* 池子捞空时的彩蛋文案（轮换，避免每次都一样） */
 const DRIFT_EMPTY = [
@@ -3722,6 +3790,13 @@ async function driftApiLike(id) {
   if (r && r.error) throw new Error(r.error.message || "共鸣失败");
   return typeof r.data === "number" ? r.data : 0;
 }
+/* 接一句：对捞到的瓶子回一句（≤50 字），瓶主会收到推送通知 */
+async function driftApiReply(bottleId, content) {
+  const r = await withFailover((c) => c.rpc("drift_reply", {
+    p_did: driftDid(), p_bottle_id: bottleId, p_content: content
+  }));
+  if (r && r.error) throw new Error(r.error.message || "发送失败");
+}
 
 /* 消息中心：一次拿回我投过的、捞过的、收到的共鸣（sql/drift_v3.sql 的 drift_mine） */
 async function driftMineApi() {
@@ -3731,12 +3806,17 @@ async function driftMineApi() {
   return (d && typeof d === "object") ? d : { thrown: [], fished: [], likes_total: 0 };
 }
 
-/* 消息中心汇总卡的三个数字（纯函数，供单测）：只做兜底与计数 */
+/* 消息中心汇总卡的数字（纯函数，供单测）：只做兜底与计数 */
 function driftMineSummary(mine) {
   const m = (mine && typeof mine === "object") ? mine : {};
   const thrown = Array.isArray(m.thrown) ? m.thrown : [];
   const fished = Array.isArray(m.fished) ? m.fished : [];
-  return { thrown: thrown.length, fished: fished.length, likes: Math.max(0, Number(m.likes_total) || 0) };
+  return {
+    thrown: thrown.length,
+    fished: fished.length,
+    likes: Math.max(0, Number(m.likes_total) || 0),
+    replies: Math.max(0, Number(m.replies_total) || 0)
+  };
 }
 
 function showDrift() {
@@ -3902,6 +3982,39 @@ function renderDrift() {
       });
       row.appendChild(like);
       card.appendChild(row);
+      /* 接一句：匿名回一句给瓶主（≤50 字），瓶主会收到推送通知 */
+      if (b.replied) {
+        card.appendChild(el("div", "drift-reply-mine", "你接的一句：" + (b.replyText || "已发送")));
+      } else {
+        const rw = el("div", "drift-reply");
+        const ta = el("textarea");
+        ta.placeholder = "接一句…（≤50 字，匿名，瓶主会收到通知）";
+        ta.spellcheck = false;
+        rw.appendChild(ta);
+        bindAutoGrow(ta, 90);
+        attachCount(ta, 50);
+        const rb = el("button", "drift-reply-btn", "接一句");
+        rw.appendChild(rb);
+        let rbusy = false;
+        const rsend = async () => {
+          if (rbusy) return;
+          const c = normalizeDriftContent(ta.value, 50);
+          if (!c) { toast("先写点什么吧"); return; }
+          rbusy = true; rb.disabled = true; rb.textContent = "发送中…";
+          try {
+            await driftApiReply(b.bottle_id, c);
+            b.replied = true; b.replyText = c;
+            toast("已接上一句，瓶主会收到通知 📮");
+            renderDrift();
+          } catch (e) {
+            toast((e && e.message) || "发送失败");
+            rbusy = false; rb.disabled = false; rb.textContent = "接一句";
+          }
+        };
+        rb.addEventListener("click", rsend);
+        ctrlEnter(ta, rsend);
+        card.appendChild(rw);
+      }
       body.appendChild(card);
     }
   }
@@ -3986,13 +4099,32 @@ function renderMsg() {
 
   const s = driftMineSummary(mine);
   const sum = el("div", "msg-summary");
-  [["投出", s.thrown], ["捞到", s.fished], ["收到共鸣", s.likes]].forEach(([label, n]) => {
+  [["投出", s.thrown], ["捞到", s.fished], ["收到共鸣", s.likes], ["收到回复", s.replies]].forEach(([label, n]) => {
     const it = el("div", "msg-stat");
     it.appendChild(el("b", "", String(n)));
     it.appendChild(el("span", "", label));
     sum.appendChild(it);
   });
   body.appendChild(sum);
+
+  /* 收到的回复（别人对我瓶子的「接一句」，匿名） */
+  const replies = Array.isArray(mine.replies) ? mine.replies : [];
+  body.appendChild(el("div", "drift-wall-t", "收到的回复" + (s.replies ? "（" + s.replies + "）" : "")));
+  if (!replies.length) {
+    body.appendChild(el("div", "f-tip", "还没有回复。瓶子被捞到后，对方可以接一句"));
+  } else {
+    replies.forEach((r2) => {
+      const card = el("div", "msg-item");
+      const tl = msgTopicLabel(r2.topic_date, r2.topic_key);
+      if (tl) card.appendChild(el("div", "msg-item-topic", "回复 · " + tl));
+      card.appendChild(el("div", "drift-bottle-txt", r2.content || ""));
+      const row = el("div", "msg-item-row");
+      row.appendChild(el("span", "msg-item-date", dateStrOf(new Date(r2.created_at))));
+      row.appendChild(el("span", "msg-item-date", "你的瓶子：" + (r2.bottle_excerpt || "")));
+      card.appendChild(row);
+      body.appendChild(card);
+    });
+  }
 
   /* 我投出的瓶子 */
   body.appendChild(el("div", "drift-wall-t", "我投出的瓶子"));
@@ -4007,7 +4139,10 @@ function renderMsg() {
       card.appendChild(el("div", "drift-bottle-txt", t.content));
       const row = el("div", "msg-item-row");
       row.appendChild(el("span", "msg-item-date", dateStrOf(new Date(t.created_at))));
-      row.appendChild(el("span", "drift-like", "♥ 共鸣 " + (t.likes || 0)));
+      const meta = el("span", "msg-item-meta");
+      meta.appendChild(el("span", "msg-item-date", "回复 " + (t.replies || 0)));
+      meta.appendChild(el("span", "drift-like", "♥ 共鸣 " + (t.likes || 0)));
+      row.appendChild(meta);
       card.appendChild(row);
       body.appendChild(card);
     });
@@ -4161,6 +4296,8 @@ function init() {
   }
   /* 漂流瓶召回推送的落地（?view=drift）——匿名功能，登录与否都能进 */
   if (jump === "drift") setTimeout(() => { try { showDrift(); } catch (e) {} }, 400);
+  /* 「被接一句 / 被共鸣」推送的落地（?view=msg） */
+  if (jump === "msg") setTimeout(() => { try { showMsg(); } catch (e) {} }, 400);
 
   render();
 }
@@ -4222,6 +4359,8 @@ async function startApp() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").then(() => initPush()).catch(() => {});
   }
+  /* 开推送软提醒：等 initPush 跑完再判断（3 秒后弹，避免抢首屏） */
+  setTimeout(() => { try { maybeShowPushRemind(); } catch (e) {} }, 3000);
 }
 
 async function loadSchoolAndStart(sid) {

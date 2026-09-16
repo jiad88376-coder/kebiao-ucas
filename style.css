@@ -1003,7 +1003,28 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .msg-item-row { display: flex; align-items: center; justify-content: space-between;
   gap: 10px; margin-top: 10px; }
 .msg-item-date { font-size: 11.5px; color: var(--muted); }
+.msg-item-meta { display: flex; align-items: center; gap: 10px; }
+.msg-item-meta .msg-item-date { font-size: 11.5px; color: var(--muted); }
 .msg-footnote { margin-top: 14px; }
+
+/* 接一句（对捞到的瓶子回一句） */
+.drift-reply { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.drift-reply textarea { width: 100%; min-height: 44px; font-size: 14px; }
+.drift-reply-btn { margin-top: 8px; border: none; border-radius: 10px;
+  background: var(--primary); color: #fff; font-weight: 600; padding: 8px 14px; cursor: pointer; }
+.drift-reply-btn:disabled { opacity: .55; }
+.drift-reply-mine { margin-top: 10px; font-size: 12.5px; color: var(--muted);
+  border-top: 1px dashed var(--line); padding-top: 8px; }
+
+/* 开推送软提醒的弹窗：右下角「不再提醒」勾选框 */
+.pr-foot { display: flex; align-items: center; justify-content: flex-end; margin-top: 12px; }
+.pr-never { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px;
+  color: var(--muted); cursor: pointer; }
+.pr-never input { accent-color: var(--primary); }
+
+/* 今日主题栏轮换的淡出 */
+.tb-text { transition: opacity .18s; }
+.tb-text.tb-swap { opacity: 0; }
 
 [data-theme="dark"] .drift-fish { border-color: rgba(90, 147, 255, .45); background: #182338; }
 [data-theme="dark"] .drift-fish:active { background: #1e2b4a; }

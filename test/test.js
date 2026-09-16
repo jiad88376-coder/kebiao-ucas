@@ -285,6 +285,10 @@ ok(app.driftMineSummary({ thrown: [], fished: [], likes_total: 7 }).likes === 7,
 ok(app.driftMineSummary({ thrown: [], fished: [], likes_total: -3 }).likes === 0, "汇总：共鸣为负按 0 兜底");
 ok(app.driftMineSummary(null).thrown === 0 && app.driftMineSummary(null).fished === 0, "汇总：null 兜底");
 ok(app.driftMineSummary({}).likes === 0, "汇总：缺字段兜底");
+ok(app.driftMineSummary({ thrown: [], fished: [], replies_total: 4 }).replies === 4, "汇总：收到回复数");
+ok(app.driftMineSummary({}).replies === 0, "汇总：回复缺字段兜底");
+ok(app.normalizeDriftContent("x".repeat(70), 50).length === 50, "接一句超长截断到 50 字");
+ok(app.normalizeDriftContent("x".repeat(120)).length === 100, "默认截断仍为 100 字");
 ok(app.normalizeDriftContent("  a   b  ") === "a b", "内容压缩空白并去首尾");
 ok(app.normalizeDriftContent("   ") === null, "内容全空白返回 null");
 ok(app.normalizeDriftContent("x".repeat(120)).length === 100, "内容超长截断到 100 字");
