@@ -2877,6 +2877,7 @@ function showMoreMenu() {
     <div class="modal-card">
       <h3>更多</h3>
       <div class="menu-list">
+        <button class="menu-item" id="mmMsg"><span class="mi-ico">📨</span><span>我的消息（瓶子与共鸣）</span></button>
         <button class="menu-item" id="mmDrift"><span class="mi-ico">🫧</span><span>漂流瓶</span></button>
         <button class="menu-item" id="mmForum"><span class="mi-ico">💬</span><span>自由论坛</span></button>
         <button class="menu-item" id="mmSearch"><span class="mi-ico">🔍</span><span>添加课程（搜索）</span></button>
@@ -2907,6 +2908,7 @@ function showMoreMenu() {
   $("mmCodes").addEventListener("click", () => { hideModal(); showCodesModal(); });
   $("mmBackup").addEventListener("click", () => { hideModal(); backupModal(); });
   $("mmWidget").addEventListener("click", () => { hideModal(); showWidgetGuide(); });
+  $("mmMsg").addEventListener("click", () => { hideModal(); showMsg(); });
   $("mmDrift").addEventListener("click", () => { hideModal(); showDrift(); });
   $("mmForum").addEventListener("click", () => { hideModal(); showForum("list"); }); /* showForum 内部仍要求登录 */
   /* 未读回复数：菜单项行尾显示一个数字角标（红点本体常驻顶栏「更多」按钮，见 renderReplyBadge） */
@@ -3721,6 +3723,22 @@ async function driftApiLike(id) {
   return typeof r.data === "number" ? r.data : 0;
 }
 
+/* 消息中心：一次拿回我投过的、捞过的、收到的共鸣（sql/drift_v3.sql 的 drift_mine） */
+async function driftMineApi() {
+  const r = await withFailover((c) => c.rpc("drift_mine", { p_did: driftDid() }));
+  if (r && r.error) throw new Error(r.error.message || "读取失败");
+  const d = r && r.data;
+  return (d && typeof d === "object") ? d : { thrown: [], fished: [], likes_total: 0 };
+}
+
+/* 消息中心汇总卡的三个数字（纯函数，供单测）：只做兜底与计数 */
+function driftMineSummary(mine) {
+  const m = (mine && typeof mine === "object") ? mine : {};
+  const thrown = Array.isArray(m.thrown) ? m.thrown : [];
+  const fished = Array.isArray(m.fished) ? m.fished : [];
+  return { thrown: thrown.length, fished: fished.length, likes: Math.max(0, Number(m.likes_total) || 0) };
+}
+
 function showDrift() {
   driftCtx.topics = driftTopics();
   driftCtx.status = null;
@@ -3728,10 +3746,7 @@ function showDrift() {
   driftCtx.liked = false;
   driftCtx.eggCount = 0;
   driftCtx.topicKey = driftCtx.topics[0] ? driftCtx.topics[0].key : "";
-  $("welcome").classList.add("hidden");
-  $("main").classList.add("hidden");
-  $("schoolPick").classList.add("hidden");
-  $("forum").classList.add("hidden");
+  ["welcome", "main", "schoolPick", "forum", "msg"].forEach((id) => $(id).classList.add("hidden"));
   $("drift").classList.remove("hidden");
   window.scrollTo(0, 0);
   renderDrift();
@@ -3916,6 +3931,109 @@ function driftUpgradeTip(st) {
   if ((st.level || 0) === 0) return { tip: "临时账户每天 3 次。注册成正式用户，每天 5 次", btn: "注册 / 登录" };
   if ((st.level || 0) === 1) return { tip: "正式用户每天 5 次。连续登录 3 天升为高级用户，每天 10 次", btn: null };
   return { tip: "高级用户今天的额度用完了，明天再来 🌙" };
+}
+
+/* ---------------- 消息中心（我投的 / 我捞的 / 收到的共鸣） ----------------
+   数据来自 drift_mine（sql/drift_v3.sql），按设备号归属，与配额计数口径一致。
+   注意：桌面图标上的数字是「今天还剩几节课」（updateAppBadge），不是消息数。 */
+let msgCtx = { mine: null };
+
+function showMsg() {
+  msgCtx.mine = null;
+  ["welcome", "main", "schoolPick", "forum", "drift"].forEach((id) => $(id).classList.add("hidden"));
+  $("msg").classList.remove("hidden");
+  window.scrollTo(0, 0);
+  renderMsg();
+  driftMineApi()
+    .then((mine) => { msgCtx.mine = mine; renderMsg(); })
+    .catch(() => {
+      msgCtx.mine = { thrown: [], fished: [], likes_total: 0, error: true };
+      renderMsg();
+    });
+}
+function closeMsg() {
+  $("msg").classList.add("hidden");
+  $("msgBody").innerHTML = "";
+  $("msgHead").innerHTML = "";
+  state.codes.length ? showMain() : showWelcome();
+}
+
+/* 话题文案：按 日期 + key 在话题库里找（消息里的瓶子可能是任意一天的） */
+function msgTopicLabel(date, key) {
+  if (!key) return "不拘话题";
+  const day = (TOPICS || []).find(x => x && x.date === date);
+  const t = day && Array.isArray(day.topics) ? day.topics.find(x => x && x.key === key) : null;
+  return t ? t.text : "";
+}
+
+function renderMsg() {
+  const head = $("msgHead");
+  head.innerHTML = "";
+  const back = el("button", "fb-back", "←");
+  back.addEventListener("click", closeMsg);
+  head.appendChild(back);
+  head.appendChild(el("div", "fb-title", "我的消息"));
+
+  const body = $("msgBody");
+  body.innerHTML = "";
+  const mine = msgCtx.mine;
+
+  if (!mine) { body.appendChild(el("div", "f-loading", "正在读取…")); return; }
+  if (mine.error) {
+    body.appendChild(el("div", "f-tip", "读取失败，稍后再试"));
+    return;
+  }
+
+  const s = driftMineSummary(mine);
+  const sum = el("div", "msg-summary");
+  [["投出", s.thrown], ["捞到", s.fished], ["收到共鸣", s.likes]].forEach(([label, n]) => {
+    const it = el("div", "msg-stat");
+    it.appendChild(el("b", "", String(n)));
+    it.appendChild(el("span", "", label));
+    sum.appendChild(it);
+  });
+  body.appendChild(sum);
+
+  /* 我投出的瓶子 */
+  body.appendChild(el("div", "drift-wall-t", "我投出的瓶子"));
+  const thrown = Array.isArray(mine.thrown) ? mine.thrown : [];
+  if (!thrown.length) {
+    body.appendChild(el("div", "f-tip", "还没投过瓶子。去漂流瓶写一句吧 🫧"));
+  } else {
+    thrown.forEach((t) => {
+      const card = el("div", "msg-item");
+      const tl = msgTopicLabel(t.topic_date, t.topic_key);
+      if (tl) card.appendChild(el("div", "msg-item-topic", tl));
+      card.appendChild(el("div", "drift-bottle-txt", t.content));
+      const row = el("div", "msg-item-row");
+      row.appendChild(el("span", "msg-item-date", dateStrOf(new Date(t.created_at))));
+      row.appendChild(el("span", "drift-like", "♥ 共鸣 " + (t.likes || 0)));
+      card.appendChild(row);
+      body.appendChild(card);
+    });
+  }
+
+  /* 我捞到的瓶子 */
+  body.appendChild(el("div", "drift-wall-t", "我捞到的瓶子"));
+  const fished = Array.isArray(mine.fished) ? mine.fished : [];
+  if (!fished.length) {
+    body.appendChild(el("div", "f-tip", "还没捞过瓶子。去漂流瓶碰碰运气 🎣"));
+  } else {
+    fished.forEach((f) => {
+      const card = el("div", "msg-item");
+      const tl = msgTopicLabel(f.topic_date, f.topic_key);
+      if (tl) card.appendChild(el("div", "msg-item-topic", tl));
+      card.appendChild(el("div", "drift-bottle-txt", f.content || ""));
+      const row = el("div", "msg-item-row");
+      row.appendChild(el("span", "msg-item-date", dateStrOf(new Date(f.fished_at))));
+      row.appendChild(el("span", "drift-like" + (f.liked ? " on" : ""), f.liked ? "♥ 已共鸣" : "♥ 未共鸣"));
+      card.appendChild(row);
+      body.appendChild(card);
+    });
+  }
+
+  body.appendChild(el("div", "f-tip msg-footnote",
+    "小字：桌面图标上的数字是「今天还剩几节课」，不是消息数 😄"));
 }
 
 /* ---------------- 初始化 ---------------- */
@@ -4297,7 +4415,7 @@ if (typeof module !== "undefined" && module.exports) {
     buildReminderJobs,
     PROXY_SOURCES, SUPABASE_KEY,
     pickTodayTopic, pickTodayTopics, normalizeDriftContent, defaultPushPrefs,
-    levelOf, quotaOf, LEVEL_NAMES, UNNAMED_TOPIC,
+    levelOf, quotaOf, LEVEL_NAMES, UNNAMED_TOPIC, driftMineSummary,
     __setRecords: (o) => { state.records = o || {}; } /* 仅供测试注入微调数据 */
   };
 }

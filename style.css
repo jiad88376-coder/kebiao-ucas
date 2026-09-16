@@ -990,6 +990,21 @@ footer.footnote { text-align: center; margin: 10px 0 26px; }
 .drift-answer::before { content: "「"; color: var(--primary); }
 .drift-answer::after { content: "」"; color: var(--primary); }
 
+/* ---------- 消息中心（我的瓶子 / 捞过的 / 收到的共鸣） ---------- */
+.msg-summary { display: flex; gap: 8px; margin: 2px 0 12px; }
+.msg-stat { flex: 1; background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px 6px; text-align: center; }
+.msg-stat b { display: block; font-size: 20px; line-height: 1.3; color: var(--primary); }
+.msg-stat span { font-size: 11.5px; color: var(--muted); }
+.msg-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 13px; }
+.msg-item + .msg-item { margin-top: 8px; }
+.msg-item-topic { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.msg-item-row { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-top: 10px; }
+.msg-item-date { font-size: 11.5px; color: var(--muted); }
+.msg-footnote { margin-top: 14px; }
+
 [data-theme="dark"] .drift-fish { border-color: rgba(90, 147, 255, .45); background: #182338; }
 [data-theme="dark"] .drift-fish:active { background: #1e2b4a; }
 [data-theme="dark"] .drift-like { background: #262b37; }

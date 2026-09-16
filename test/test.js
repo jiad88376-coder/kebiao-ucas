@@ -277,6 +277,14 @@ ok(app.quotaOf(1) === 5, "正式用户 5 次/天");
 ok(app.quotaOf(2) === 10, "高级用户 10 次/天");
 ok(app.quotaOf(9) === 10, "未知等级按最高处理");
 ok(app.LEVEL_NAMES.length === 3 && app.LEVEL_NAMES[0] === "临时账户", "等级名称表就位");
+
+console.log("== 消息中心：汇总 ==");
+ok(app.driftMineSummary({ thrown: [{}, {}], fished: [{}], likes_total: 7 }).thrown === 2, "汇总：投出数");
+ok(app.driftMineSummary({ thrown: [], fished: [{}, {}], likes_total: 7 }).fished === 2, "汇总：捞到数");
+ok(app.driftMineSummary({ thrown: [], fished: [], likes_total: 7 }).likes === 7, "汇总：收到共鸣数");
+ok(app.driftMineSummary({ thrown: [], fished: [], likes_total: -3 }).likes === 0, "汇总：共鸣为负按 0 兜底");
+ok(app.driftMineSummary(null).thrown === 0 && app.driftMineSummary(null).fished === 0, "汇总：null 兜底");
+ok(app.driftMineSummary({}).likes === 0, "汇总：缺字段兜底");
 ok(app.normalizeDriftContent("  a   b  ") === "a b", "内容压缩空白并去首尾");
 ok(app.normalizeDriftContent("   ") === null, "内容全空白返回 null");
 ok(app.normalizeDriftContent("x".repeat(120)).length === 100, "内容超长截断到 100 字");
